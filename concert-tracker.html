@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concert Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --bg-card: #f0f0f0;
+            --bg-hover: #e4e4e4;
+            --accent: #1db954;
+            --accent-hover: #1ed760;
+            --text-primary: #121212;
+            --text-secondary: #5e5e5e;
+            --text-muted: #a0a0a0;
+            --border: #e0e0e0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* ── SETUP ─────────────────────────────── */
+        #setup-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .setup-container {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 48px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+
+        .setup-logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .setup-logo svg { width: 60px; height: 60px; }
+
+        .setup-logo h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 12px;
+        }
+
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+
+        .step-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s;
+        }
+        .step-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
+        .step-dot.done   { background: var(--accent); }
+
+        .setup-step { display: none; }
+        .setup-step.active { display: block; }
+
+        .setup-step h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .setup-step p  { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            font-size: 12px; font-weight: 700;
+            letter-spacing: 0.1em; text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .form-group input {
+            width: 100%;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: var(--text-primary);
+            font-size: 13px;
+            transition: border-color 0.2s;
+            font-family: 'Courier New', monospace;
+        }
+        .form-group input:focus { outline: none; border-color: var(--accent); }
+
+        .btn {
+            width: 100%; padding: 16px;
+            border: none; border-radius: 50px;
+            font-size: 14px; font-weight: 700;
+            letter-spacing: 0.1em; text-transform: uppercase;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-primary:hover { background: var(--accent-hover); transform: scale(1.02); }
+        .btn-secondary {
+            background: transparent; color: var(--text-secondary);
+            border: 2px solid var(--border); margin-bottom: 12px;
+        }
+        .btn-secondary:hover { color: var(--text-primary); border-color: var(--text-primary); }
+
+        /* ── APP HEADER ─────────────────────────── */
+        #app-screen { display: none; min-height: 100vh; }
+
+        .app-header {
+            background: linear-gradient(to bottom, #eafaf0 0%, var(--bg-primary) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 32px;
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+
+        .app-header h1 { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .app-header h1 span { color: var(--accent); }
+
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+
+        .user-badge {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-card); border-radius: 50px;
+            padding: 6px 16px 6px 6px;
+        }
+        .user-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; color: #000;
+        }
+
+        .btn-sm {
+            padding: 8px 16px; border-radius: 50px;
+            font-size: 12px; font-weight: 700;
+            letter-spacing: 0.05em; text-transform: uppercase;
+            cursor: pointer; border: none; transition: all 0.2s;
+        }
+        .btn-sm.outline {
+            background: transparent; color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .btn-sm.outline:hover { color: var(--text-primary); border-color: var(--text-primary); }
+
+        /* ── LOADING ────────────────────────────── */
+        .loading-state {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 80px 20px; gap: 20px;
+        }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: var(--text-secondary); font-size: 15px; text-align: center; }
+        .loading-progress {
+            width: 300px; height: 4px;
+            background: var(--border); border-radius: 2px; overflow: hidden;
+        }
+        .loading-progress-bar {
+            height: 100%; background: var(--accent);
+            border-radius: 2px; transition: width 0.3s ease;
+        }
+
+        /* ── STATS BAR ──────────────────────────── */
+        .stats-bar {
+            display: none; gap: 24px;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            margin: 0 32px 32px;
+            border-radius: 12px;
+        }
+        .stat-item { display: flex; flex-direction: column; gap: 2px; }
+        .stat-value { font-size: 20px; font-weight: 700; color: var(--accent); }
+        .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+        /* ── FILTER BAR ─────────────────────────── */
+        .filter-bar {
+            display: none; align-items: center; gap: 12px;
+            padding: 0 32px; margin-bottom: 28px;
+        }
+        .filter-bar.show { display: flex; }
+        .filter-bar label {
+            font-size: 12px; font-weight: 700;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .filter-bar select {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 50px;
+            padding: 10px 18px;
+            color: var(--text-primary);
+            font-size: 14px; font-weight: 600;
+            cursor: pointer; min-width: 220px;
+            transition: border-color 0.2s;
+        }
+        .filter-bar select:focus { outline: none; border-color: var(--accent); }
+        .filter-bar #filter-count { font-size: 13px; color: var(--text-muted); }
+
+        /* ── CONCERTS GRID ──────────────────────── */
+        .app-content { padding: 0 32px 48px; }
+
+        .month-section { margin-bottom: 48px; }
+        .month-header {
+            font-size: 20px; font-weight: 700;
+            margin-bottom: 20px; padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 12px;
+            text-transform: capitalize;
+        }
+        .month-count { font-size: 13px; color: var(--text-muted); font-weight: 400; }
+
+        .concerts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+            gap: 16px;
+        }
+
+        .concert-card {
+            background: var(--bg-card); border-radius: 12px;
+            overflow: hidden; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .concert-card:hover {
+            background: var(--bg-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .concert-card-image {
+            width: 100%; aspect-ratio: 1;
+            background: var(--bg-hover);
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+        .concert-card-image img { width: 100%; height: 100%; object-fit: cover; }
+        .concert-card-image .ph { font-size: 48px; opacity: 0.3; }
+
+        .concert-card-body { padding: 14px; }
+        .concert-artist { font-size: 14px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .concert-date { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+        .concert-venue { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .concert-city { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        /* ── SIDE PANEL ─────────────────────────── */
+        .panel-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 200; display: none;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .panel-overlay.open { display: block; opacity: 1; }
+
+        .side-panel {
+            position: fixed; right: -480px; top: 0; bottom: 0;
+            width: 440px; background: var(--bg-secondary);
+            z-index: 201; transition: right 0.3s ease;
+            overflow-y: auto;
+            box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+        }
+        .side-panel.open { right: 0; }
+
+        .panel-header {
+            position: sticky; top: 0;
+            background: var(--bg-secondary);
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 10;
+        }
+        .panel-close {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--bg-hover); border: none;
+            color: var(--text-primary); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: background 0.2s;
+        }
+        .panel-close:hover { background: var(--border); }
+
+        .panel-body { padding: 24px; }
+
+        .panel-artist-image {
+            width: 100%; aspect-ratio: 16/9;
+            border-radius: 12px; margin-bottom: 20px;
+            background: var(--bg-card);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 64px; overflow: hidden;
+        }
+        .panel-artist-image img { width: 100%; height: 100%; object-fit: cover; }
+
+        .panel-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+        .panel-subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+
+        .panel-section { margin-bottom: 24px; }
+        .panel-section-title {
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.15em; text-transform: uppercase;
+            color: var(--text-muted); margin-bottom: 10px;
+        }
+
+        .info-row {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 0; border-bottom: 1px solid var(--border);
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-icon { font-size: 15px; width: 22px; text-align: center; }
+        .info-label { color: var(--text-secondary); font-size: 13px; flex: 1; }
+        .info-value { font-size: 13px; font-weight: 600; }
+        .price-badge {
+            background: var(--accent); color: #000;
+            padding: 4px 12px; border-radius: 50px;
+            font-size: 13px; font-weight: 700;
+        }
+
+        .action-links { display: flex; flex-direction: column; gap: 10px; }
+        .action-link {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; background: var(--bg-card);
+            border-radius: 10px; text-decoration: none;
+            color: var(--text-primary); transition: all 0.2s;
+            font-size: 14px; font-weight: 600;
+        }
+        .action-link:hover { background: var(--bg-hover); transform: translateX(4px); }
+        .action-link-icon {
+            width: 36px; height: 36px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; flex-shrink: 0;
+        }
+        .gflights-icon { background: #4285f4; }
+        .booking-icon { background: #003580; }
+        .airbnb-icon  { background: #ff5a5f; }
+        .action-link-text small {
+            display: block; font-size: 11px;
+            color: var(--text-muted); font-weight: 400; margin-top: 2px;
+        }
+
+        /* ── ERROR / EMPTY ─────────────────────── */
+        .error-banner {
+            background: #3d1a1a; border: 1px solid #7a2323;
+            color: #ff6b6b; padding: 12px 16px;
+            border-radius: 8px; margin: 16px 32px;
+            font-size: 13px; display: none;
+        }
+        .empty-state { text-align: center; padding: 80px 20px; color: var(--text-secondary); }
+        .empty-state .empty-icon { font-size: 64px; margin-bottom: 16px; }
+        .empty-state h2 { font-size: 20px; color: var(--text-primary); margin-bottom: 8px; }
+
+        @media (max-width: 600px) {
+            .app-header { padding: 16px; }
+            .app-content { padding: 0 16px 32px; }
+            .stats-bar { margin: 0 16px 24px; }
+            .side-panel { width: 100%; right: -100%; }
+            .concerts-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════╗
+     ║  SETUP SCREEN                            ║
+     ╚══════════════════════════════════════════╝ -->
+<div id="setup-screen">
+    <div class="setup-container">
+        <div class="setup-logo">
+            <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="30" cy="30" r="30" fill="#1DB954"/>
+                <path d="M20 38c5-3 11-4 17-2M18 30c7-4 15-5 22-2M22 22c5-2 10-3 16-1"
+                      stroke="white" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <h1>Concert Tracker</h1>
+        </div>
+
+        <div class="step-indicator">
+            <div class="step-dot active" id="dot-0"></div>
+            <div class="step-dot" id="dot-1"></div>
+        </div>
+
+        <!-- Pas 1: Spotify -->
+        <div class="setup-step active" id="step-0">
+            <h2>Connecta Spotify</h2>
+            <p>Introdueix el teu Spotify Client ID per accedir als artistes que segueixes.
+               L'autenticació es fa via OAuth PKCE; les credencials no surten del teu navegador.</p>
+            <div class="form-group">
+                <label>Spotify Client ID</label>
+                <input type="text" id="spotify-client-id"
+                       value="0f41aa60ebc64a74b9d3e4bbf8c05eb9"
+                       placeholder="Client ID de Spotify">
+            </div>
+            <div class="form-group">
+                <label>Redirect URI</label>
+                <input type="text" id="spotify-redirect-uri"
+                       value="http://127.0.0.1:8080/concert-tracker.html"
+                       placeholder="Redirect URI registrada a Spotify">
+            </div>
+            <button class="btn btn-primary" onclick="nextStep()">Continua &rarr;</button>
+        </div>
+
+        <!-- Pas 2: Ticketmaster -->
+        <div class="setup-step" id="step-1">
+            <h2>Configura Ticketmaster</h2>
+            <p>Introdueix la teva Ticketmaster Consumer Key per buscar concerts dels teus artistes.
+               Pots obtenir-la gratuïtament a <strong>developer.ticketmaster.com</strong>.</p>
+            <div class="form-group">
+                <label>Ticketmaster API Key</label>
+                <input type="text" id="tm-api-key"
+                       value="FJRz663PY7sjjODqvWlRHIXGInboRBUA"
+                       placeholder="Consumer Key de Ticketmaster">
+            </div>
+            <button class="btn btn-secondary" onclick="prevStep()">&larr; Enrere</button>
+            <button class="btn btn-primary" onclick="startAuth()">Connecta amb Spotify</button>
+        </div>
+    </div>
+</div>
+
+<!-- ╔══════════════════════════════════════════╗
+     ║  APP SCREEN                              ║
+     ╚══════════════════════════════════════════╝ -->
+<div id="app-screen">
+    <header class="app-header">
+        <h1>&#127925; Concert <span>Tracker</span></h1>
+        <div class="header-actions">
+            <div class="user-badge" id="user-badge">
+                <div class="user-avatar" id="user-avatar">?</div>
+                <span id="user-name" style="font-size:13px;font-weight:600"></span>
+            </div>
+            <button class="btn-sm outline" onclick="logout()">Sortir</button>
+        </div>
+    </header>
+
+    <div class="error-banner" id="error-banner"></div>
+
+    <!-- Loading -->
+    <div class="loading-state" id="loading-state">
+        <div class="spinner"></div>
+        <div>
+            <div class="loading-text" id="loading-text">Carregant...</div>
+            <div style="margin-top:16px">
+                <div class="loading-progress">
+                    <div class="loading-progress-bar" id="progress-bar" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar" id="stats-bar">
+        <div class="stat-item">
+            <span class="stat-value" id="stat-artists">0</span>
+            <span class="stat-label">Artistes detectats</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value" id="stat-concerts">0</span>
+            <span class="stat-label">Concerts trobats</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value" id="stat-months">0</span>
+            <span class="stat-label">Mesos amb concerts</span>
+        </div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filter-bar" id="filter-bar">
+        <select id="continent-filter" onchange="applyFilter()">
+            <option value="__all__">Tots els continents</option>
+        </select>
+        <select id="artist-filter" onchange="applyFilter()">
+            <option value="__all__">Tots els artistes</option>
+        </select>
+        <span id="filter-count"></span>
+    </div>
+
+    <div class="app-content" id="concerts-container"></div>
+</div>
+
+<!-- ╔══════════════════════════════════════════╗
+     ║  SIDE PANEL                              ║
+     ╚══════════════════════════════════════════╝ -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanel()"></div>
+<div class="side-panel" id="side-panel">
+    <div class="panel-header">
+        <span style="font-size:14px;font-weight:700;color:var(--text-secondary)">Detalls del concert</span>
+        <button class="panel-close" onclick="closePanel()">&#10005;</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   AIRPORTS — city → IATA
+═══════════════════════════════════════════════════════════════ */
+const AIRPORTS = {
+    // Espanya
+    'Barcelona':'BCN','Madrid':'MAD','Valencia':'VLC','Sevilla':'SVQ',
+    'Bilbao':'BIO','Malaga':'AGP','Palma':'PMI','Ibiza':'IBZ',
+    'Gran Canaria':'LPA','Tenerife':'TFN','Alicante':'ALC',
+    'Santiago de Compostela':'SCQ','Girona':'GRO','Reus':'REU',
+    'Zaragoza':'ZAZ','Valladolid':'VLL','Santander':'SDR',
+    // Regne Unit
+    'London':'LHR','Manchester':'MAN','Birmingham':'BHX',
+    'Glasgow':'GLA','Edinburgh':'EDI','Bristol':'BRS','Liverpool':'LPL',
+    'Leeds':'LBA','Sheffield':'DSA','Newcastle':'NCL',
+    // França
+    'Paris':'CDG','Lyon':'LYS','Marseille':'MRS','Nice':'NCE',
+    'Bordeaux':'BOD','Toulouse':'TLS','Nantes':'NTE','Strasbourg':'SXB',
+    'Lille':'LIL','Montpellier':'MPL','Rennes':'RNS',
+    // Alemanya
+    'Berlin':'BER','Munich':'MUC','Hamburg':'HAM','Frankfurt':'FRA',
+    'Cologne':'CGN','Düsseldorf':'DUS','Stuttgart':'STR',
+    'Hannover':'HAJ','Leipzig':'LEJ','Dresden':'DRS','Nuremberg':'NUE',
+    // Itàlia
+    'Rome':'FCO','Milan':'MXP','Venice':'VCE','Florence':'FLR',
+    'Naples':'NAP','Bologna':'BLQ','Turin':'TRN','Catania':'CTA','Bari':'BRI',
+    // Països Baixos
+    'Amsterdam':'AMS','Rotterdam':'RTM','Eindhoven':'EIN',
+    // Bèlgica
+    'Brussels':'BRU','Antwerp':'ANR','Ghent':'GNT',
+    // Portugal
+    'Lisbon':'LIS','Porto':'OPO','Faro':'FAO',
+    // Àustria / Suïssa
+    'Vienna':'VIE','Zurich':'ZRH','Geneva':'GVA','Salzburg':'SZG','Innsbruck':'INN',
+    'Basel':'BSL','Bern':'BRN',
+    // Escandinàvia
+    'Stockholm':'ARN','Oslo':'OSL','Copenhagen':'CPH',
+    'Helsinki':'HEL','Gothenburg':'GOT','Malmo':'MMX','Aarhus':'AAR',
+    // Europa Est
+    'Prague':'PRG','Budapest':'BUD','Warsaw':'WAW','Krakow':'KRK',
+    'Bucharest':'OTP','Sofia':'SOF','Athens':'ATH',
+    'Zagreb':'ZAG','Ljubljana':'LJU','Bratislava':'BTS',
+    'Belgrade':'BEG','Riga':'RIX','Tallinn':'TLL','Vilnius':'VNO',
+    'Thessaloniki':'SKG','Cluj-Napoca':'CLJ',
+    // EUA
+    'New York':'JFK','Los Angeles':'LAX','Chicago':'ORD',
+    'San Francisco':'SFO','Miami':'MIA','Boston':'BOS',
+    'Seattle':'SEA','Las Vegas':'LAS','Nashville':'BNA',
+    'Austin':'AUS','Atlanta':'ATL','Denver':'DEN',
+    'Portland':'PDX','Minneapolis':'MSP','Detroit':'DTW',
+    'Philadelphia':'PHL','Dallas':'DFW','Houston':'IAH','Phoenix':'PHX',
+    'New Orleans':'MSY','Salt Lake City':'SLC','Kansas City':'MCI',
+    'San Diego':'SAN','Oakland':'OAK','Indianapolis':'IND',
+    // Canadà
+    'Toronto':'YYZ','Montreal':'YUL','Vancouver':'YVR','Calgary':'YYC',
+    'Ottawa':'YOW','Edmonton':'YEG','Halifax':'YHZ',
+    // Mèxic / Llatinoamèrica
+    'Mexico City':'MEX','Guadalajara':'GDL','Monterrey':'MTY',
+    'Bogotá':'BOG','Lima':'LIM','Santiago':'SCL','Buenos Aires':'EZE',
+    'São Paulo':'GRU','Rio de Janeiro':'GIG','Medellín':'MDE',
+    // Resta del món
+    'Tokyo':'NRT','Seoul':'ICN','Sydney':'SYD','Melbourne':'MEL',
+    'Dubai':'DXB','Singapore':'SIN','Hong Kong':'HKG',
+    'Tel Aviv':'TLV','Istanbul':'IST','Casablanca':'CMN',
+    'Johannesburg':'JNB','Cape Town':'CPT',
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   CONFIG & STATE
+═══════════════════════════════════════════════════════════════ */
+const CONTINENTS = {
+    // Europa
+    'ES':'Europa','FR':'Europa','DE':'Europa','GB':'Europa','IT':'Europa',
+    'PT':'Europa','NL':'Europa','BE':'Europa','CH':'Europa','AT':'Europa',
+    'SE':'Europa','NO':'Europa','DK':'Europa','FI':'Europa','PL':'Europa',
+    'CZ':'Europa','HU':'Europa','GR':'Europa','RO':'Europa','HR':'Europa',
+    'IE':'Europa','LU':'Europa','SK':'Europa','SI':'Europa','RS':'Europa',
+    'BG':'Europa','LV':'Europa','EE':'Europa','LT':'Europa','MK':'Europa',
+    'AL':'Europa','BA':'Europa','ME':'Europa','XK':'Europa','MD':'Europa',
+    'UA':'Europa','BY':'Europa','IS':'Europa','MT':'Europa','CY':'Europa',
+    'Spain':'Europa','France':'Europa','Germany':'Europa','United Kingdom':'Europa',
+    'Italy':'Europa','Portugal':'Europa','Netherlands':'Europa','Belgium':'Europa',
+    'Switzerland':'Europa','Austria':'Europa','Sweden':'Europa','Norway':'Europa',
+    'Denmark':'Europa','Finland':'Europa','Poland':'Europa','Czech Republic':'Europa',
+    'Hungary':'Europa','Greece':'Europa','Romania':'Europa','Croatia':'Europa',
+    'Ireland':'Europa','Luxembourg':'Europa','Slovakia':'Europa','Slovenia':'Europa',
+    'Serbia':'Europa','Bulgaria':'Europa','Latvia':'Europa','Estonia':'Europa',
+    'Lithuania':'Europa','Ukraine':'Europa','Iceland':'Europa','Malta':'Europa',
+    // Amèrica del Nord
+    'US':'Amèrica N.','CA':'Amèrica N.','MX':'Amèrica N.',
+    'United States':'Amèrica N.','Canada':'Amèrica N.','Mexico':'Amèrica N.',
+    // Amèrica del Sud
+    'BR':'Amèrica S.','AR':'Amèrica S.','CO':'Amèrica S.','CL':'Amèrica S.',
+    'PE':'Amèrica S.','VE':'Amèrica S.','EC':'Amèrica S.','BO':'Amèrica S.',
+    'Brazil':'Amèrica S.','Argentina':'Amèrica S.','Colombia':'Amèrica S.',
+    'Chile':'Amèrica S.','Peru':'Amèrica S.',
+    // Àsia
+    'JP':'Àsia','KR':'Àsia','CN':'Àsia','SG':'Àsia','IN':'Àsia',
+    'TH':'Àsia','ID':'Àsia','MY':'Àsia','PH':'Àsia','TW':'Àsia',
+    'Japan':'Àsia','South Korea':'Àsia','China':'Àsia','Singapore':'Àsia',
+    'India':'Àsia','Thailand':'Àsia',
+    // Orient Mitjà
+    'IL':'Orient M.','AE':'Orient M.','SA':'Orient M.','TR':'Orient M.',
+    'Israel':'Orient M.','United Arab Emirates':'Orient M.','Turkey':'Orient M.',
+    // Àfrica
+    'ZA':'Àfrica','MA':'Àfrica','NG':'Àfrica','EG':'Àfrica',
+    'South Africa':'Àfrica','Morocco':'Àfrica',
+    // Oceania
+    'AU':'Oceania','NZ':'Oceania',
+    'Australia':'Oceania','New Zealand':'Oceania',
+};
+
+function getContinentForConcert(c) {
+    if (c.countryCode && CONTINENTS[c.countryCode]) return CONTINENTS[c.countryCode];
+    if (c.country && CONTINENTS[c.country]) return CONTINENTS[c.country];
+    return 'Altres';
+}
+
+const SPOTIFY_SCOPES = 'user-follow-read user-read-private playlist-read-private playlist-read-collaborative user-library-read';
+let config = { clientId: '', redirectUri: '', tmKey: '' };
+let accessToken = null;
+let allConcerts = [];
+let allArtists  = [];
+
+/* ═══════════════════════════════════════════════════════════════
+   SETUP FLOW
+═══════════════════════════════════════════════════════════════ */
+function nextStep() {
+    const clientId    = document.getElementById('spotify-client-id').value.trim();
+    const redirectUri = document.getElementById('spotify-redirect-uri').value.trim();
+    if (!clientId || !redirectUri) { alert('Omple tots els camps'); return; }
+    config.clientId    = clientId;
+    config.redirectUri = redirectUri;
+    document.getElementById('step-0').classList.remove('active');
+    document.getElementById('step-1').classList.add('active');
+    document.getElementById('dot-0').classList.remove('active');
+    document.getElementById('dot-0').classList.add('done');
+    document.getElementById('dot-1').classList.add('active');
+}
+
+function prevStep() {
+    document.getElementById('step-1').classList.remove('active');
+    document.getElementById('step-0').classList.add('active');
+    document.getElementById('dot-1').classList.remove('active');
+    document.getElementById('dot-0').classList.remove('done');
+    document.getElementById('dot-0').classList.add('active');
+}
+
+async function startAuth() {
+    const tmKey = document.getElementById('tm-api-key').value.trim();
+    if (!tmKey) { alert('Omple la Ticketmaster API Key'); return; }
+    config.tmKey = tmKey;
+    sessionStorage.setItem('ct_config', JSON.stringify(config));
+
+    const verifier  = generateVerifier();
+    const challenge = await generateChallenge(verifier);
+    sessionStorage.setItem('pkce_verifier', verifier);
+
+    const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: config.clientId,
+        scope: SPOTIFY_SCOPES,
+        redirect_uri: config.redirectUri,
+        code_challenge_method: 'S256',
+        code_challenge: challenge,
+    });
+    window.location.href = 'https://accounts.spotify.com/authorize?' + params;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PKCE HELPERS
+═══════════════════════════════════════════════════════════════ */
+function generateVerifier() {
+    const arr = new Uint8Array(32);
+    crypto.getRandomValues(arr);
+    return btoa(String.fromCharCode(...arr))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function generateChallenge(verifier) {
+    const data   = new TextEncoder().encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTH CALLBACK
+═══════════════════════════════════════════════════════════════ */
+async function handleCallback() {
+    const params = new URLSearchParams(window.location.search);
+    const code   = params.get('code');
+    if (!code) return false;
+
+    const saved = sessionStorage.getItem('ct_config');
+    if (!saved) return false;
+    config = JSON.parse(saved);
+
+    const verifier = sessionStorage.getItem('pkce_verifier');
+
+    try {
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type:    'authorization_code',
+                code,
+                redirect_uri:  config.redirectUri,
+                client_id:     config.clientId,
+                code_verifier: verifier,
+            }),
+        });
+        if (!res.ok) throw new Error('Token exchange failed: ' + res.status);
+        const data  = await res.json();
+        accessToken = data.access_token;
+        sessionStorage.setItem('ct_token', accessToken);
+        sessionStorage.removeItem('pkce_verifier');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return true;
+    } catch (err) {
+        showError('Error autenticant amb Spotify: ' + err.message);
+        return false;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SPOTIFY API
+═══════════════════════════════════════════════════════════════ */
+async function spotifyFetch(url) {
+    const res = await fetch(url, {
+        headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    if (res.status === 401) { logout(); throw new Error('Token caducat'); }
+    if (!res.ok) {
+        var path = url.replace('https://api.spotify.com/v1', '').split('?')[0];
+        throw new Error('Spotify API error ' + res.status + ' → ' + path);
+    }
+    return res.json();
+}
+
+async function getUserProfile() {
+    return spotifyFetch('https://api.spotify.com/v1/me');
+}
+
+async function getFollowedArtists() {
+    let artists = [];
+    let url = 'https://api.spotify.com/v1/me/following?type=artist&limit=50';
+    while (url) {
+        const data = await spotifyFetch(url);
+        artists    = artists.concat(data.artists.items);
+        url        = data.artists.next;
+    }
+    return artists;
+}
+
+async function getAllArtists() {
+    const artistMap = new Map();
+
+    // 1. Artistes seguits (ja tenen imatges)
+    setLoading('Carregant artistes seguits...');
+    let followUrl = 'https://api.spotify.com/v1/me/following?type=artist&limit=50';
+    while (followUrl) {
+        const data = await spotifyFetch(followUrl);
+        data.artists.items.forEach(function(a) { artistMap.set(a.id, a); });
+        followUrl = data.artists.next;
+    }
+
+    // Recollim id→nom dels artistes nous (de Liked Songs i playlists).
+    // Guardem el nom com a fallback per si /artists falla o exclou algun id.
+    var nameById      = new Map();
+    var VALID_ID      = /^[A-Za-z0-9]{22}$/;  // un ID vàlid de Spotify té 22 caràcters base62
+    function addArtist(a) {
+        if (!a || !a.id || artistMap.has(a.id)) return;
+        if (!VALID_ID.test(a.id)) return;       // descarta artistes de fitxers locals / ids invàlids
+        if (a.name) nameById.set(a.id, a.name);
+    }
+
+    // 2. Cançons que t'agraden (Liked Songs / "M'agrada")
+    setLoading('Carregant cançons que t\'agraden...');
+    var likedCount = 0;
+    var likedUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
+    try {
+        while (likedUrl) {
+            var likedData = await spotifyFetch(likedUrl);
+            (likedData.items || []).forEach(function(item) {
+                if (!item || !item.track || !item.track.artists) return;
+                likedCount++;
+                item.track.artists.forEach(addArtist);
+            });
+            likedUrl = likedData.next;
+            setLoading('Carregant cançons que t\'agraden... ' + likedCount);
+        }
+    } catch (e) {
+        console.warn('No s\'han pogut llegir les Liked Songs:', e.message);
+    }
+
+    // 3. Totes les playlists de l'usuari
+    setLoading('Carregant llistes de reproducció...');
+    var playlists = [];
+    var plUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
+    while (plUrl) {
+        var plData = await spotifyFetch(plUrl);
+        playlists = playlists.concat(plData.items.filter(function(p) { return p; }));
+        plUrl = plData.next;
+    }
+
+    // 4. Extreure artistes de cada playlist
+    //    (algunes llistes editorials/algorítmiques de Spotify donen 403 → es salten)
+    var skipped = 0;
+    for (var i = 0; i < playlists.length; i++) {
+        var pl = playlists[i];
+        setLoading('Analitzant llista ' + (i + 1) + '/' + playlists.length + ': ' + pl.name + '...');
+        var trUrl = 'https://api.spotify.com/v1/playlists/' + pl.id + '/tracks?limit=100&fields=next,items(track(artists(id,name)))';
+        try {
+            while (trUrl) {
+                var trData = await spotifyFetch(trUrl);
+                (trData.items || []).forEach(function(item) {
+                    if (!item || !item.track || !item.track.artists) return;
+                    item.track.artists.forEach(addArtist);
+                });
+                trUrl = trData.next;
+            }
+        } catch (e) {
+            // Llista inaccessible (403/404) — la saltem i continuem
+            skipped++;
+            console.warn('Saltant playlist "' + pl.name + '":', e.message);
+        }
+        if (i % 5 === 4) await sleep(100);
+    }
+    if (skipped) console.info(skipped + ' llistes inaccessibles saltades');
+
+    // 5. Obtenir detalls (imatges) dels artistes nous en batches de 50.
+    //    Si un lot falla, fem servir el nom guardat com a fallback (sense imatge).
+    var ids = Array.from(nameById.keys());
+    setLoading('Obtenint detalls de ' + ids.length + ' artistes nous...');
+    for (var j = 0; j < ids.length; j += 50) {
+        var batch = ids.slice(j, j + 50);
+        try {
+            var aData = await spotifyFetch('https://api.spotify.com/v1/artists?ids=' + batch.join(','));
+            (aData.artists || []).forEach(function(a) { if (a) artistMap.set(a.id, a); });
+        } catch (e) {
+            console.warn('No s\'han pogut obtenir detalls d\'un lot d\'artistes:', e.message);
+        }
+        if (j + 50 < ids.length) await sleep(200);
+    }
+
+    // 6. Fallback: artistes amb nom però sense detalls (lot fallit) → els afegim igualment
+    nameById.forEach(function(name, id) {
+        if (!artistMap.has(id)) artistMap.set(id, { id: id, name: name, images: [] });
+    });
+
+    return Array.from(artistMap.values());
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TICKETMASTER API
+═══════════════════════════════════════════════════════════════ */
+async function searchConcerts(artistName, artistImage) {
+    const now      = new Date();
+    const today    = now.toISOString().slice(0,10) + 'T00:00:00Z';
+    const nextYear = new Date(now.getTime() + 365*24*60*60*1000).toISOString().slice(0,10) + 'T23:59:59Z';
+
+    const params = new URLSearchParams({
+        apikey:             config.tmKey,
+        keyword:            artistName,
+        classificationName: 'Music',
+        startDateTime:      today,
+        endDateTime:        nextYear,
+        size:               '20',
+        sort:               'date,asc',
+    });
+
+    try {
+        const res  = await fetch('https://app.ticketmaster.com/discovery/v2/events.json?' + params);
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (!data._embedded || !data._embedded.events) return [];
+
+        return data._embedded.events.map(function(ev) {
+            const venue      = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
+            const priceRange = ev.priceRanges && ev.priceRanges[0];
+            const imgs       = ev.images || [];
+            const img        = imgs.find(function(i) { return i.ratio === '16_9' && i.width > 500; }) || imgs[0];
+            return {
+                id:          ev.id,
+                name:        ev.name,
+                artist:      artistName,
+                artistImage: artistImage,
+                date:        ev.dates && ev.dates.start && ev.dates.start.localDate,
+                time:        ev.dates && ev.dates.start && ev.dates.start.localTime,
+                venue:       venue && venue.name,
+                city:        venue && venue.city && venue.city.name,
+                country:     venue && venue.country && venue.country.name,
+                countryCode: venue && venue.country && venue.country.countryCode,
+                minPrice:    priceRange && priceRange.min,
+                currency:    priceRange && priceRange.currency,
+                url:         ev.url,
+                image:       (img && img.url) || artistImage,
+            };
+        });
+    } catch(e) {
+        console.warn('TM error for', artistName, e);
+        return [];
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BATCH SEARCH — 4 concurrent, 300ms delay between batches
+═══════════════════════════════════════════════════════════════ */
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+async function fetchAllConcerts(artists, onProgress) {
+    const concerts = [];
+    const BATCH    = 4;
+    for (let i = 0; i < artists.length; i += BATCH) {
+        const batch   = artists.slice(i, i + BATCH);
+        const results = await Promise.all(
+            batch.map(function(a) {
+                return searchConcerts(a.name, a.images && a.images[0] && a.images[0].url || '');
+            })
+        );
+        results.forEach(function(r) { concerts.push.apply(concerts, r); });
+        onProgress(i + batch.length, artists.length, concerts.length);
+        if (i + BATCH < artists.length) await sleep(300);
+    }
+    return concerts;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════════════════════════ */
+function groupByMonth(concerts) {
+    var months = {};
+    concerts.forEach(function(c) {
+        if (!c.date) return;
+        var d   = new Date(c.date + 'T12:00:00');
+        var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        if (!months[key]) months[key] = [];
+        months[key].push(c);
+    });
+    return months;
+}
+
+function fmtDate(date, time) {
+    if (!date) return 'Data TBD';
+    var d = new Date(date + 'T12:00:00');
+    var s = d.toLocaleDateString('ca-ES', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    if (time) s += ' · ' + time.slice(0, 5);
+    return s;
+}
+
+function monthLabel(key) {
+    var parts = key.split('-');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+    return d.toLocaleDateString('ca-ES', { month:'long', year:'numeric' });
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function renderConcerts(concerts) {
+    var container = document.getElementById('concerts-container');
+    if (!concerts.length) {
+        container.innerHTML =
+            '<div class="empty-state">' +
+            '<div class="empty-icon">&#127928;</div>' +
+            '<h2>Cap concert</h2>' +
+            '<p>No hi ha concerts per a aquest filtre.</p>' +
+            '</div>';
+        return;
+    }
+
+    var grouped = groupByMonth(concerts);
+    var keys    = Object.keys(grouped).sort();
+
+    container.innerHTML = keys.map(function(key) {
+        var cards = grouped[key].map(function(c) {
+            var idx = allConcerts.indexOf(c);
+            var img = c.image
+                ? '<img src="' + escHtml(c.image) + '" alt="' + escHtml(c.artist) + '" loading="lazy" ' +
+                  'onerror="this.parentElement.innerHTML=\'<span class=ph>&#127925;</span>\'">'
+                : '<span class="ph">&#127925;</span>';
+            var city = c.city ? escHtml(c.city) + (c.country ? ', ' + escHtml(c.country) : '') : '';
+            return '<div class="concert-card" onclick="openPanel(' + idx + ')">' +
+                   '<div class="concert-card-image">' + img + '</div>' +
+                   '<div class="concert-card-body">' +
+                   '<div class="concert-artist">' + escHtml(c.artist) + '</div>' +
+                   '<div class="concert-date">' + fmtDate(c.date, c.time) + '</div>' +
+                   '<div class="concert-venue">' + escHtml(c.venue || 'Venue TBD') + '</div>' +
+                   '<div class="concert-city">' + city + '</div>' +
+                   '</div></div>';
+        }).join('');
+        var count = grouped[key].length;
+        return '<div class="month-section">' +
+               '<div class="month-header">' + monthLabel(key) +
+               '<span class="month-count">' + count + ' concert' + (count !== 1 ? 's' : '') + '</span></div>' +
+               '<div class="concerts-grid">' + cards + '</div>' +
+               '</div>';
+    }).join('');
+}
+
+function updateStats(concerts) {
+    var months = Object.keys(groupByMonth(concerts)).length;
+    document.getElementById('stat-concerts').textContent = concerts.length;
+    document.getElementById('stat-months').textContent   = months;
+    document.getElementById('stats-bar').style.display   = 'flex';
+}
+
+function populateFilters(concerts) {
+    // Continents
+    var continentCount = {};
+    concerts.forEach(function(c) {
+        var cont = getContinentForConcert(c);
+        continentCount[cont] = (continentCount[cont] || 0) + 1;
+    });
+    var continentOrder = ['Europa','Amèrica N.','Amèrica S.','Àsia','Orient M.','Àfrica','Oceania','Altres'];
+    var cSel = document.getElementById('continent-filter');
+    cSel.innerHTML = '<option value="__all__">Tots els continents</option>' +
+        continentOrder.filter(function(c) { return continentCount[c]; }).map(function(c) {
+            return '<option value="' + c + '">' + c + ' (' + continentCount[c] + ')</option>';
+        }).join('');
+
+    // Artistes
+    refreshArtistFilter(concerts);
+    document.getElementById('filter-bar').classList.add('show');
+}
+
+function refreshArtistFilter(concerts) {
+    var names = {};
+    concerts.forEach(function(c) { if (c.artist) names[c.artist] = (names[c.artist] || 0) + 1; });
+    var sorted = Object.keys(names).sort(function(a, b) {
+        return a.toLowerCase().localeCompare(b.toLowerCase());
+    });
+    var aSel = document.getElementById('artist-filter');
+    var prev = aSel.value;
+    aSel.innerHTML = '<option value="__all__">Tots els artistes</option>' +
+        sorted.map(function(n) {
+            return '<option value="' + escHtml(n) + '">' + escHtml(n) + ' (' + names[n] + ')</option>';
+        }).join('');
+    if (prev && prev !== '__all__') aSel.value = prev;
+}
+
+function applyFilter() {
+    var continent = document.getElementById('continent-filter').value;
+    var artist    = document.getElementById('artist-filter').value;
+
+    // Primer filtrem per continent
+    var byContinent = continent === '__all__'
+        ? allConcerts
+        : allConcerts.filter(function(c) { return getContinentForConcert(c) === continent; });
+
+    // Actualitzem artistes disponibles per al continent seleccionat
+    if (document.activeElement === document.getElementById('continent-filter')) {
+        document.getElementById('artist-filter').value = '__all__';
+        artist = '__all__';
+        refreshArtistFilter(byContinent);
+    }
+
+    // Després filtrem per artista
+    var subset = artist === '__all__'
+        ? byContinent
+        : byContinent.filter(function(c) { return c.artist === artist; });
+
+    renderConcerts(subset);
+
+    var fc = document.getElementById('filter-count');
+    var isFiltered = continent !== '__all__' || artist !== '__all__';
+    if (!isFiltered) {
+        fc.textContent = '';
+    } else {
+        var venues = {};
+        subset.forEach(function(c) { if (c.venue) venues[c.venue] = true; });
+        fc.textContent = subset.length + ' concert' + (subset.length !== 1 ? 's' : '') +
+            (Object.keys(venues).length ? ' · ' + Object.keys(venues).length + ' lloc' + (Object.keys(venues).length !== 1 ? 's' : '') : '');
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SIDE PANEL
+═══════════════════════════════════════════════════════════════ */
+// Aeroport principal per país — nom anglès i codi ISO2
+const COUNTRY_AIRPORTS = {
+    'Belgium':'BRU',      'BE':'BRU',
+    'Netherlands':'AMS',  'NL':'AMS',
+    'Germany':'FRA',      'DE':'FRA',
+    'France':'CDG',       'FR':'CDG',
+    'United Kingdom':'LHR','GB':'LHR',
+    'Italy':'FCO',        'IT':'FCO',
+    'Spain':'MAD',        'ES':'MAD',
+    'Portugal':'LIS',     'PT':'LIS',
+    'Austria':'VIE',      'AT':'VIE',
+    'Switzerland':'ZRH',  'CH':'ZRH',
+    'Denmark':'CPH',      'DK':'CPH',
+    'Sweden':'ARN',       'SE':'ARN',
+    'Norway':'OSL',       'NO':'OSL',
+    'Finland':'HEL',      'FI':'HEL',
+    'Poland':'WAW',       'PL':'WAW',
+    'Czech Republic':'PRG','CZ':'PRG',
+    'Hungary':'BUD',      'HU':'BUD',
+    'Greece':'ATH',       'GR':'ATH',
+    'Romania':'OTP',      'RO':'OTP',
+    'Croatia':'ZAG',      'HR':'ZAG',
+    'Ireland':'DUB',      'IE':'DUB',
+    'Luxembourg':'LUX',   'LU':'LUX',
+    'Slovakia':'BTS',     'SK':'BTS',
+    'Slovenia':'LJU',     'SI':'LJU',
+    'Serbia':'BEG',       'RS':'BEG',
+    'Bulgaria':'SOF',     'BG':'SOF',
+    'Latvia':'RIX',       'LV':'RIX',
+    'Estonia':'TLL',      'EE':'TLL',
+    'Lithuania':'VNO',    'LT':'VNO',
+    'United States':'JFK','US':'JFK',
+    'Canada':'YYZ',       'CA':'YYZ',
+    'Mexico':'MEX',       'MX':'MEX',
+    'Brazil':'GRU',       'BR':'GRU',
+    'Argentina':'EZE',    'AR':'EZE',
+    'Australia':'SYD',    'AU':'SYD',
+    'Japan':'NRT',        'JP':'NRT',
+    'South Korea':'ICN',  'KR':'ICN',
+    'China':'PEK',        'CN':'PEK',
+    'United Arab Emirates':'DXB','AE':'DXB',
+    'Singapore':'SIN',    'SG':'SIN',
+    'Israel':'TLV',       'IL':'TLV',
+    'Turkey':'IST',       'TR':'IST',
+    'Morocco':'CMN',      'MA':'CMN',
+    'South Africa':'JNB', 'ZA':'JNB',
+    'Colombia':'BOG',     'CO':'BOG',
+    'Chile':'SCL',        'CL':'SCL',
+    'Peru':'LIM',         'PE':'LIM',
+};
+
+function normalizeCity(s) {
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+function getIATA(city, country, countryCode) {
+    if (!city) return { iata: null, label: null };
+    var nCity = normalizeCity(city);
+    // 1. Coincidència exacta
+    if (AIRPORTS[city]) return { iata: AIRPORTS[city], label: city };
+    // 2. Coincidència exacta sense accents
+    var keys = Object.keys(AIRPORTS);
+    for (var i = 0; i < keys.length; i++) {
+        if (normalizeCity(keys[i]) === nCity) return { iata: AIRPORTS[keys[i]], label: city };
+    }
+    // 3. Coincidència parcial sense accents
+    for (var j = 0; j < keys.length; j++) {
+        if (nCity.indexOf(normalizeCity(keys[j])) !== -1) return { iata: AIRPORTS[keys[j]], label: city };
+    }
+    // 4. Fallback per nom de país
+    if (country && COUNTRY_AIRPORTS[country]) {
+        return { iata: COUNTRY_AIRPORTS[country], label: COUNTRY_AIRPORTS[country] };
+    }
+    // 5. Fallback per codi ISO2
+    if (countryCode && COUNTRY_AIRPORTS[countryCode]) {
+        return { iata: COUNTRY_AIRPORTS[countryCode], label: COUNTRY_AIRPORTS[countryCode] };
+    }
+    return { iata: null, label: null };
+}
+
+function dateOffset(dateStr, days) {
+    var d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+}
+
+// Calcula les dates d'estada segons el dia de la setmana del concert:
+//   · Divendres  → dijous a diumenge (3 nits)
+//   · Dilluns    → dissabte a dimarts (3 nits)
+//   · Altres dies → dia abans a dia després (2 nits)
+function computeStay(dateStr) {
+    if (!dateStr) return { checkin: null, checkout: null, nights: 0 };
+    var dow = new Date(dateStr + 'T12:00:00').getDay(); // 0=dg, 1=dl, ... 5=dv, 6=ds
+    var before, after;
+    if (dow === 5)      { before = -1; after = 2; }  // divendres → dijous..diumenge
+    else if (dow === 1) { before = -2; after = 1; }  // dilluns   → dissabte..dimarts
+    else                { before = -1; after = 1; }  // resta     → dia abans..dia després
+    var checkin  = dateOffset(dateStr, before);
+    var checkout = dateOffset(dateStr, after);
+    return { checkin: checkin, checkout: checkout, nights: after - before };
+}
+
+function openPanel(idx) {
+    var c = allConcerts[idx];
+    if (!c) return;
+
+    var stay     = computeStay(c.date);
+    var checkin  = stay.checkin;
+    var checkout = stay.checkout;
+    var iataRes  = getIATA(c.city, c.country, c.countryCode);
+    var iata     = iataRes.iata;
+    var iataLabel = iataRes.label;
+
+    // Skyscanner anada+tornada: /BCN/DST/YYMMDD/YYMMDD/
+    function toSkyDate(d) { return d ? d.slice(2).replace(/-/g,'') : ''; }
+    var skyUrl = iata && checkin && checkout
+        ? 'https://www.skyscanner.net/transport/flights/BCN/' + iata + '/' + toSkyDate(checkin) + '/' + toSkyDate(checkout) + '/'
+        : null;
+    var cityEnc     = encodeURIComponent(c.city || '');
+    var bookingUrl  = c.city ? 'https://www.booking.com/search.html?ss=' + cityEnc + '&checkin=' + checkin + '&checkout=' + checkout + '&group_adults=1' : null;
+    var airbnbUrl   = c.city ? 'https://www.airbnb.com/s/' + cityEnc + '/homes?checkin=' + checkin + '&checkout=' + checkout + '&adults=1' : null;
+
+    var infoRows =
+        '<div class="info-row"><span class="info-icon">&#128197;</span>' +
+        '<span class="info-label">Data</span>' +
+        '<span class="info-value">' + fmtDate(c.date, c.time) + '</span></div>' +
+
+        '<div class="info-row"><span class="info-icon">&#128205;</span>' +
+        '<span class="info-label">Venue</span>' +
+        '<span class="info-value">' + escHtml(c.venue || 'TBD') + '</span></div>' +
+
+        '<div class="info-row"><span class="info-icon">&#127757;</span>' +
+        '<span class="info-label">Ciutat</span>' +
+        '<span class="info-value">' + escHtml(c.city || 'TBD') + (c.country ? ', ' + escHtml(c.country) : '') + '</span></div>';
+
+    if (c.minPrice) {
+        infoRows +=
+            '<div class="info-row"><span class="info-icon">&#127903;&#65039;</span>' +
+            '<span class="info-label">Preu mínim</span>' +
+            '<span class="price-badge">' + Math.round(c.minPrice) + ' ' + (c.currency || 'EUR') + '</span></div>';
+    }
+    if (c.url) {
+        infoRows +=
+            '<div class="info-row"><span class="info-icon">&#128279;</span>' +
+            '<span class="info-label">Entrades</span>' +
+            '<a href="' + escHtml(c.url) + '" target="_blank" rel="noopener" ' +
+            'style="color:var(--accent);font-size:13px;font-weight:600;text-decoration:none">Ticketmaster &rarr;</a></div>';
+    }
+
+    var flightsSection = '';
+    if (skyUrl) {
+        flightsSection = '<div class="panel-section">' +
+            '<div class="panel-section-title">Vol des de Barcelona</div>' +
+            '<div class="action-links">' +
+            '<a href="' + skyUrl + '" target="_blank" rel="noopener" class="action-link">' +
+            '<div class="action-link-icon" style="background:#0770e3">&#9992;&#65039;</div>' +
+            '<div class="action-link-text">Skyscanner · Anada i tornada' +
+            '<small>BCN &harr; ' + iataLabel + ' &nbsp;|&nbsp; ' + checkin + ' &rarr; ' + checkout + '</small>' +
+            '</div></a>' +
+            '</div></div>';
+    }
+
+    var accomSection = '';
+    if (bookingUrl || airbnbUrl) {
+        accomSection = '<div class="panel-section">' +
+            '<div class="panel-section-title">Allotjament (' + stay.nights + ' nits)</div>' +
+            '<div class="action-links">';
+        if (bookingUrl) {
+            accomSection +=
+                '<a href="' + bookingUrl + '" target="_blank" rel="noopener" class="action-link">' +
+                '<div class="action-link-icon booking-icon">&#127968;</div>' +
+                '<div class="action-link-text">Booking.com<small>' + checkin + ' &rarr; ' + checkout + '</small></div></a>';
+        }
+        if (airbnbUrl) {
+            accomSection +=
+                '<a href="' + airbnbUrl + '" target="_blank" rel="noopener" class="action-link">' +
+                '<div class="action-link-icon airbnb-icon">&#127968;</div>' +
+                '<div class="action-link-text">Airbnb<small>' + checkin + ' &rarr; ' + checkout + '</small></div></a>';
+        }
+        accomSection += '</div></div>';
+    }
+
+    var heroImg = c.image
+        ? '<img src="' + escHtml(c.image) + '" alt="' + escHtml(c.artist) + '">'
+        : '&#127925;';
+
+    document.getElementById('panel-body').innerHTML =
+        '<div class="panel-artist-image">' + heroImg + '</div>' +
+        '<div class="panel-title">' + escHtml(c.name || c.artist) + '</div>' +
+        '<div class="panel-subtitle">' + escHtml(c.artist) + '</div>' +
+        '<div class="panel-section">' +
+        '<div class="panel-section-title">Informació</div>' +
+        infoRows +
+        '</div>' +
+        flightsSection +
+        accomSection;
+
+    document.getElementById('panel-overlay').classList.add('open');
+    document.getElementById('side-panel').classList.add('open');
+}
+
+function closePanel() {
+    document.getElementById('panel-overlay').classList.remove('open');
+    document.getElementById('side-panel').classList.remove('open');
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════════════════════════════ */
+function setLoading(text) {
+    document.getElementById('loading-text').textContent = text;
+}
+function setProgress(done, total) {
+    var pct = total > 0 ? Math.round(done / total * 100) : 0;
+    document.getElementById('progress-bar').style.width = pct + '%';
+}
+function showError(msg) {
+    var el = document.getElementById('error-banner');
+    el.textContent = '⚠️ ' + msg;
+    el.style.display = 'block';
+    setTimeout(function() { el.style.display = 'none'; }, 10000);
+}
+function logout() {
+    sessionStorage.clear();
+    window.location.href = window.location.pathname;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN FLOW
+═══════════════════════════════════════════════════════════════ */
+async function mainFlow() {
+    document.getElementById('app-screen').style.display   = 'block';
+    document.getElementById('setup-screen').style.display = 'none';
+
+    try {
+        setLoading("Obtenint perfil d'usuari...");
+        var profile  = await getUserProfile();
+        var initials = (profile.display_name || profile.id || '?').slice(0, 2).toUpperCase();
+        document.getElementById('user-avatar').textContent = initials;
+        document.getElementById('user-name').textContent   = profile.display_name || profile.id;
+
+        var artists = await getAllArtists();
+        allArtists  = artists;
+        document.getElementById('stat-artists').textContent = artists.length;
+
+        if (!artists.length) {
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('concerts-container').innerHTML =
+                '<div class="empty-state">' +
+                '<div class="empty-icon">&#127928;</div>' +
+                '<h2>Sense artistes</h2>' +
+                '<p>No s\'han trobat artistes als teus seguits ni a les teves llistes de reproducció.</p>' +
+                '</div>';
+            return;
+        }
+
+        setLoading('Buscant concerts per ' + artists.length + ' artistes...');
+        setProgress(0, artists.length);
+
+        allConcerts = await fetchAllConcerts(artists, function(done, total, found) {
+            setLoading('Buscant concerts… ' + done + '/' + total + ' artistes · ' + found + ' trobats');
+            setProgress(done, total);
+        });
+
+        allConcerts.sort(function(a, b) {
+            return (a.date || '').localeCompare(b.date || '');
+        });
+
+        document.getElementById('loading-state').style.display = 'none';
+        updateStats(allConcerts);
+        if (allConcerts.length) populateFilters(allConcerts);
+        renderConcerts(allConcerts);
+
+    } catch(err) {
+        document.getElementById('loading-state').style.display = 'none';
+        showError(err.message);
+        console.error(err);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════ */
+(async function init() {
+    var urlParams = new URLSearchParams(window.location.search);
+
+    if (urlParams.has('code')) {
+        var ok = await handleCallback();
+        if (ok) { await mainFlow(); return; }
+    }
+
+    var savedToken  = sessionStorage.getItem('ct_token');
+    var savedConfig = sessionStorage.getItem('ct_config');
+
+    if (savedToken && savedConfig) {
+        accessToken = savedToken;
+        config      = JSON.parse(savedConfig);
+        await mainFlow();
+        return;
+    }
+
+    document.getElementById('app-screen').style.display   = 'none';
+    document.getElementById('setup-screen').style.display = 'flex';
+})();
+</script>
+</body>
+</html>
