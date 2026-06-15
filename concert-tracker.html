@@ -792,6 +792,7 @@ async function getAllArtists() {
     setLoading('Carregant cançons que t\'agraden...');
     var likedCount = 0;
     var likedUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
+    var likedPage = 0;
     try {
         while (likedUrl) {
             var likedData = await spotifyFetch(likedUrl);
@@ -801,11 +802,15 @@ async function getAllArtists() {
                 item.track.artists.forEach(addArtist);
             });
             likedUrl = likedData.next;
+            likedPage++;
             setLoading('Carregant cançons que t\'agraden... ' + likedCount);
+            if (likedUrl) await sleep(150);  // pausa entre pàgines per evitar 429
         }
     } catch (e) {
         console.warn('No s\'han pogut llegir les Liked Songs:', e.message);
     }
+
+    await sleep(300);  // pausa entre fases
 
     // 3. Totes les playlists de l'usuari
     setLoading('Carregant llistes de reproducció...');
@@ -815,6 +820,7 @@ async function getAllArtists() {
         var plData = await spotifyFetch(plUrl);
         playlists = playlists.concat(plData.items.filter(function(p) { return p; }));
         plUrl = plData.next;
+        if (plUrl) await sleep(150);  // pausa entre pàgines
     }
 
     // 4. Extreure artistes de cada playlist
