@@ -730,6 +730,27 @@ async function handleCallback() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   ARTIST CACHE (localStorage, 24h TTL)
+═══════════════════════════════════════════════════════════════ */
+var CACHE_KEY = 'ct_artists_v1';
+var CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hores
+
+function getCachedArtists() {
+    try {
+        var raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        var obj = JSON.parse(raw);
+        if (Date.now() - obj.ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY); return null; }
+        return obj.artists;
+    } catch(e) { return null; }
+}
+
+function setCachedArtists(artists) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), artists: artists })); }
+    catch(e) {}
+}
+
+/* ═══════════════════════════════════════════════════════════════
    SPOTIFY API
 ═══════════════════════════════════════════════════════════════ */
 async function spotifyFetch(url, _retries) {
@@ -767,6 +788,13 @@ async function getFollowedArtists() {
 }
 
 async function getAllArtists() {
+    // Serveix des de caché si és fresca (< 24h)
+    var cached = getCachedArtists();
+    if (cached && cached.length) {
+        setLoading('Artistes carregats des de caché (' + cached.length + ')');
+        return cached;
+    }
+
     const artistMap = new Map();
 
     // 1. Artistes seguits (ja tenen imatges)
@@ -868,7 +896,9 @@ async function getAllArtists() {
         if (!artistMap.has(id)) artistMap.set(id, { id: id, name: name, images: [] });
     });
 
-    return Array.from(artistMap.values());
+    var result = Array.from(artistMap.values());
+    setCachedArtists(result);  // desa a caché 24h
+    return result;
 }
 
 /* ═══════════════════════════════════════════════════════════════
