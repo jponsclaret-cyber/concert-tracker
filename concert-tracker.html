@@ -732,11 +732,18 @@ async function handleCallback() {
 /* ═══════════════════════════════════════════════════════════════
    SPOTIFY API
 ═══════════════════════════════════════════════════════════════ */
-async function spotifyFetch(url) {
-    const res = await fetch(url, {
+async function spotifyFetch(url, _retries) {
+    var retries = (_retries === undefined) ? 4 : _retries;
+    var res = await fetch(url, {
         headers: { Authorization: 'Bearer ' + accessToken }
     });
     if (res.status === 401) { logout(); throw new Error('Token caducat'); }
+    if (res.status === 429 && retries > 0) {
+        var wait = parseInt(res.headers.get('Retry-After') || '2', 10);
+        setLoading('Spotify rate limit — esperant ' + wait + 's...');
+        await sleep((wait + 1) * 1000);
+        return spotifyFetch(url, retries - 1);
+    }
     if (!res.ok) {
         var path = url.replace('https://api.spotify.com/v1', '').split('?')[0];
         throw new Error('Spotify API error ' + res.status + ' → ' + path);
