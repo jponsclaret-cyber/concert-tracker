@@ -760,9 +760,9 @@ async function spotifyFetch(url, _retries) {
     });
     if (res.status === 401) { logout(); throw new Error('Token caducat'); }
     if (res.status === 429 && retries > 0) {
-        var wait = parseInt(res.headers.get('Retry-After') || '2', 10);
-        setLoading('Spotify rate limit — esperant ' + wait + 's...');
-        await sleep((wait + 1) * 1000);
+        var wait = Math.max(parseInt(res.headers.get('Retry-After') || '5', 10), 5);
+        setLoading('Spotify rate limit — esperant ' + wait + 's... (' + retries + ' intents restants)');
+        await sleep((wait + 2) * 1000);
         return spotifyFetch(url, retries - 1);
     }
     if (!res.ok) {
@@ -816,13 +816,14 @@ async function getAllArtists() {
         if (a.name) nameById.set(a.id, a.name);
     }
 
-    // 2. Cançons que t'agraden (Liked Songs / "M'agrada")
+    // 2. Cançons que t'agraden (Liked Songs / "M'agrada") — màx. 500 cançons (10 pàgines)
     setLoading('Carregant cançons que t\'agraden...');
     var likedCount = 0;
     var likedUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
-    var likedPage = 0;
+    var likedPages = 0;
+    var MAX_LIKED_PAGES = 10;
     try {
-        while (likedUrl) {
+        while (likedUrl && likedPages < MAX_LIKED_PAGES) {
             var likedData = await spotifyFetch(likedUrl);
             (likedData.items || []).forEach(function(item) {
                 if (!item || !item.track || !item.track.artists) return;
@@ -830,25 +831,31 @@ async function getAllArtists() {
                 item.track.artists.forEach(addArtist);
             });
             likedUrl = likedData.next;
-            likedPage++;
+            likedPages++;
             setLoading('Carregant cançons que t\'agraden... ' + likedCount);
-            if (likedUrl) await sleep(150);  // pausa entre pàgines per evitar 429
+            if (likedUrl && likedPages < MAX_LIKED_PAGES) await sleep(500);
         }
     } catch (e) {
         console.warn('No s\'han pogut llegir les Liked Songs:', e.message);
     }
 
-    await sleep(300);  // pausa entre fases
+    await sleep(1000);  // pausa llarga entre fases
 
-    // 3. Totes les playlists de l'usuari
+    // 3. Totes les playlists de l'usuari (si falla per 429, continuem sense playlists)
     setLoading('Carregant llistes de reproducció...');
     var playlists = [];
-    var plUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
-    while (plUrl) {
-        var plData = await spotifyFetch(plUrl);
-        playlists = playlists.concat(plData.items.filter(function(p) { return p; }));
-        plUrl = plData.next;
-        if (plUrl) await sleep(150);  // pausa entre pàgines
+    try {
+        var plUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
+        while (plUrl) {
+            var plData = await spotifyFetch(plUrl);
+            playlists = playlists.concat(plData.items.filter(function(p) { return p; }));
+            plUrl = plData.next;
+            if (plUrl) await sleep(400);  // pausa entre pàgines
+        }
+    } catch (e) {
+        console.warn('No s\'han pogut llegir les playlists (rate limit?):', e.message);
+        setLoading('Playlists no disponibles, continuant amb artistes seguits...');
+        await sleep(1000);
     }
 
     // 4. Extreure artistes de cada playlist
@@ -868,11 +875,10 @@ async function getAllArtists() {
                 trUrl = trData.next;
             }
         } catch (e) {
-            // Llista inaccessible (403/404) — la saltem i continuem
             skipped++;
             console.warn('Saltant playlist "' + pl.name + '":', e.message);
         }
-        if (i % 5 === 4) await sleep(100);
+        if (i % 5 === 4) await sleep(200);
     }
     if (skipped) console.info(skipped + ' llistes inaccessibles saltades');
 
