@@ -739,7 +739,7 @@ function confirmPlaylists() {
     config.includeLiked    = document.getElementById('inc-liked')    ? document.getElementById('inc-liked').checked    : true;
     var boxes = document.querySelectorAll('#playlist-picker .pl-check');
     var selected = Array.from(boxes).filter(function(b) { return b.checked; }).map(function(b) { return b.value; });
-    config.selectedPlaylistIds = selected.length ? selected : null;
+    config.selectedPlaylistIds = selected;  // array buit = res seleccionat (no null)
     sessionStorage.setItem('ct_config', JSON.stringify(config));
     localStorage.removeItem(CACHE_KEY);  // invalida caché perquè la selecció pot haver canviat
     mainFlow();
@@ -938,13 +938,18 @@ async function getAllArtists() {
     //    (ja les tenim carregades; només cal filtrar per les seleccionades)
     var allFetched = window._allFetchedPlaylists || [];
     var playlists;
-    if (config.selectedPlaylistIds && config.selectedPlaylistIds.length) {
+    if (!Array.isArray(config.selectedPlaylistIds)) {
+        // Sessió antiga sense pas de selecció → usa totes les llistes
+        playlists = allFetched;
+        setLoading('Analitzant totes les llistes (' + playlists.length + ')...');
+    } else if (config.selectedPlaylistIds.length === 0) {
+        // L'usuari no ha seleccionat cap llista → cap
+        playlists = [];
+        setLoading('Cap llista seleccionada, continuant...');
+    } else {
         var sel = new Set(config.selectedPlaylistIds);
         playlists = allFetched.filter(function(p) { return sel.has(p.id); });
         setLoading('Analitzant ' + playlists.length + ' llistes seleccionades...');
-    } else {
-        playlists = allFetched;
-        setLoading('Analitzant totes les llistes (' + playlists.length + ')...');
     }
 
     // 4. Extreure artistes de cada playlist
