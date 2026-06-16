@@ -704,13 +704,24 @@ async function showPlaylistStep() {
         // Desa les playlists per usar-les a confirmPlaylists
         window._allFetchedPlaylists = playlists;
 
-        picker.innerHTML = playlists.map(function(pl) {
-            return '<label class="playlist-item">' +
-                '<input type="checkbox" value="' + pl.id + '" checked>' +
-                '<span class="playlist-item-name">' + escHtml(pl.name) + '</span>' +
-                '<span class="playlist-item-count">' + (pl.tracks && pl.tracks.total || 0) + ' cançons</span>' +
-                '</label>';
-        }).join('');
+        picker.innerHTML =
+            '<label class="playlist-item" style="background:var(--bg-hover)">' +
+            '<input type="checkbox" id="inc-followed" checked>' +
+            '<span class="playlist-item-name">⭐ Artistes que segueixo</span>' +
+            '<span class="playlist-item-count">seguits</span>' +
+            '</label>' +
+            '<label class="playlist-item" style="background:var(--bg-hover)">' +
+            '<input type="checkbox" id="inc-liked" checked>' +
+            '<span class="playlist-item-name">❤️ Cançons que m\'agraden</span>' +
+            '<span class="playlist-item-count">fins 500</span>' +
+            '</label>' +
+            playlists.map(function(pl) {
+                return '<label class="playlist-item">' +
+                    '<input type="checkbox" class="pl-check" value="' + pl.id + '" checked>' +
+                    '<span class="playlist-item-name">' + escHtml(pl.name) + '</span>' +
+                    '<span class="playlist-item-count">' + (pl.tracks && pl.tracks.total || 0) + ' cançons</span>' +
+                    '</label>';
+            }).join('');
     } catch(e) {
         picker.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px">No s\'han pogut carregar les llistes. Es faran servir totes.</div>';
         window._allFetchedPlaylists = [];
@@ -724,10 +735,13 @@ function toggleAllPlaylists() {
 }
 
 function confirmPlaylists() {
-    var boxes = document.querySelectorAll('#playlist-picker input[type=checkbox]');
+    config.includeFollowed = document.getElementById('inc-followed') ? document.getElementById('inc-followed').checked : true;
+    config.includeLiked    = document.getElementById('inc-liked')    ? document.getElementById('inc-liked').checked    : true;
+    var boxes = document.querySelectorAll('#playlist-picker .pl-check');
     var selected = Array.from(boxes).filter(function(b) { return b.checked; }).map(function(b) { return b.value; });
     config.selectedPlaylistIds = selected.length ? selected : null;
     sessionStorage.setItem('ct_config', JSON.stringify(config));
+    localStorage.removeItem(CACHE_KEY);  // invalida caché perquè la selecció pot haver canviat
     mainFlow();
 }
 
@@ -876,46 +890,46 @@ async function getAllArtists() {
 
     const artistMap = new Map();
 
-    // 1. Artistes seguits (ja tenen imatges)
-    setLoading('Carregant artistes seguits...');
-    let followUrl = 'https://api.spotify.com/v1/me/following?type=artist&limit=50';
-    while (followUrl) {
-        const data = await spotifyFetch(followUrl);
-        data.artists.items.forEach(function(a) { artistMap.set(a.id, a); });
-        followUrl = data.artists.next;
-    }
-
-    // Recollim id→nom dels artistes nous (de Liked Songs i playlists).
-    // Guardem el nom com a fallback per si /artists falla o exclou algun id.
-    var nameById      = new Map();
-    var VALID_ID      = /^[A-Za-z0-9]{22}$/;  // un ID vàlid de Spotify té 22 caràcters base62
+    var nameById = new Map();
+    var VALID_ID = /^[A-Za-z0-9]{22}$/;
     function addArtist(a) {
         if (!a || !a.id || artistMap.has(a.id)) return;
-        if (!VALID_ID.test(a.id)) return;       // descarta artistes de fitxers locals / ids invàlids
+        if (!VALID_ID.test(a.id)) return;
         if (a.name) nameById.set(a.id, a.name);
     }
 
-    // 2. Cançons que t'agraden (Liked Songs / "M'agrada") — màx. 500 cançons (10 pàgines)
-    setLoading('Carregant cançons que t\'agraden...');
-    var likedCount = 0;
-    var likedUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
-    var likedPages = 0;
-    var MAX_LIKED_PAGES = 10;
-    try {
-        while (likedUrl && likedPages < MAX_LIKED_PAGES) {
-            var likedData = await spotifyFetch(likedUrl);
-            (likedData.items || []).forEach(function(item) {
-                if (!item || !item.track || !item.track.artists) return;
-                likedCount++;
-                item.track.artists.forEach(addArtist);
-            });
-            likedUrl = likedData.next;
-            likedPages++;
-            setLoading('Carregant cançons que t\'agraden... ' + likedCount);
-            if (likedUrl && likedPages < MAX_LIKED_PAGES) await sleep(500);
-        }
-    } catch (e) {
-        console.warn('No s\'han pogut llegir les Liked Songs:', e.message);
+    // 1. Artistes seguits (opcional)
+    if (config.includeFollowed !== false) {
+        setLoading('Carregant artistes seguits...');
+        var followUrl = 'https://api.spotify.com/v1/me/following?type=artist&limit=50';
+        try {
+            while (followUrl) {
+                var fData = await spotifyFetch(followUrl);
+                fData.artists.items.forEach(function(a) { artistMap.set(a.id, a); });
+                followUrl = fData.artists.next;
+                if (followUrl) await sleep(300);
+            }
+        } catch(e) { console.warn('Seguits:', e.message); }
+    }
+
+    // 2. Cançons que m'agraden (opcional) — màx. 500 cançons (10 pàgines)
+    if (config.includeLiked !== false) {
+        setLoading('Carregant cançons que t\'agraden...');
+        var likedUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
+        var likedPages = 0;
+        try {
+            while (likedUrl && likedPages < 10) {
+                var likedData = await spotifyFetch(likedUrl);
+                (likedData.items || []).forEach(function(item) {
+                    if (!item || !item.track || !item.track.artists) return;
+                    item.track.artists.forEach(addArtist);
+                });
+                likedUrl = likedData.next;
+                likedPages++;
+                setLoading('Cançons que m\'agraden... ' + likedPages * 50);
+                if (likedUrl && likedPages < 10) await sleep(500);
+            }
+        } catch(e) { console.warn('Liked Songs:', e.message); }
     }
 
     await sleep(1000);  // pausa llarga entre fases
