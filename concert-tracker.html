@@ -354,6 +354,24 @@
             color: var(--text-muted); font-weight: 400; margin-top: 2px;
         }
 
+        /* ── PLAYLIST PICKER ───────────────────── */
+        .playlist-list {
+            max-height: 280px; overflow-y: auto;
+            border: 2px solid var(--border); border-radius: 10px;
+            margin-bottom: 16px;
+        }
+        .playlist-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 14px; border-bottom: 1px solid var(--border);
+            cursor: pointer; transition: background 0.15s;
+        }
+        .playlist-item:last-child { border-bottom: none; }
+        .playlist-item:hover { background: var(--bg-card); }
+        .playlist-item input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .playlist-item-name { font-size: 13px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .playlist-item-count { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+        .playlist-select-all { font-size: 12px; color: var(--accent); cursor: pointer; margin-bottom: 8px; display: inline-block; }
+
         /* ── ERROR / EMPTY ─────────────────────── */
         .error-banner {
             background: #3d1a1a; border: 1px solid #7a2323;
@@ -393,6 +411,7 @@
         <div class="step-indicator">
             <div class="step-dot active" id="dot-0"></div>
             <div class="step-dot" id="dot-1"></div>
+            <div class="step-dot" id="dot-2"></div>
         </div>
 
         <!-- Pas 1: Spotify -->
@@ -428,6 +447,15 @@
             </div>
             <button class="btn btn-secondary" onclick="prevStep()">&larr; Enrere</button>
             <button class="btn btn-primary" onclick="startAuth()">Connecta amb Spotify</button>
+        </div>
+
+        <!-- Pas 3: Selecció de llistes (apareix després del callback OAuth) -->
+        <div class="setup-step" id="step-2">
+            <h2>Selecciona les teves llistes</h2>
+            <p>Marca les llistes que vols incloure en la cerca d'artistes. Les llistes amb més cançons apareixen primer.</p>
+            <span class="playlist-select-all" onclick="toggleAllPlaylists()">Seleccionar / deseleccionar totes</span>
+            <div class="playlist-list" id="playlist-picker"></div>
+            <button class="btn btn-primary" onclick="confirmPlaylists()">Busca concerts &rarr;</button>
         </div>
     </div>
 </div>
@@ -631,25 +659,76 @@ let allArtists  = [];
 /* ═══════════════════════════════════════════════════════════════
    SETUP FLOW
 ═══════════════════════════════════════════════════════════════ */
+function goToStep(n) {
+    [0,1,2].forEach(function(i) {
+        document.getElementById('step-' + i).classList.toggle('active', i === n);
+        var dot = document.getElementById('dot-' + i);
+        dot.classList.toggle('active', i === n);
+        dot.classList.toggle('done', i < n);
+    });
+}
+
 function nextStep() {
     const clientId    = document.getElementById('spotify-client-id').value.trim();
     const redirectUri = document.getElementById('spotify-redirect-uri').value.trim();
     if (!clientId || !redirectUri) { alert('Omple tots els camps'); return; }
     config.clientId    = clientId;
     config.redirectUri = redirectUri;
-    document.getElementById('step-0').classList.remove('active');
-    document.getElementById('step-1').classList.add('active');
-    document.getElementById('dot-0').classList.remove('active');
-    document.getElementById('dot-0').classList.add('done');
-    document.getElementById('dot-1').classList.add('active');
+    goToStep(1);
 }
 
-function prevStep() {
-    document.getElementById('step-1').classList.remove('active');
-    document.getElementById('step-0').classList.add('active');
-    document.getElementById('dot-1').classList.remove('active');
-    document.getElementById('dot-0').classList.remove('done');
-    document.getElementById('dot-0').classList.add('active');
+function prevStep() { goToStep(0); }
+
+// Mostra el pas de selecció de playlists després del callback OAuth
+async function showPlaylistStep() {
+    document.getElementById('setup-screen').style.display = 'flex';
+    document.getElementById('app-screen').style.display   = 'none';
+    goToStep(2);
+
+    var picker = document.getElementById('playlist-picker');
+    picker.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px">Carregant llistes...</div>';
+
+    try {
+        var playlists = [];
+        var url = 'https://api.spotify.com/v1/me/playlists?limit=50';
+        while (url) {
+            var data = await spotifyFetch(url);
+            playlists = playlists.concat(data.items.filter(function(p) { return p && p.id && p.name; }));
+            url = data.next;
+            if (url) await sleep(300);
+        }
+        // Ordena per nombre de cançons (descendent) — proxy de llista més escoltada
+        playlists.sort(function(a, b) {
+            return (b.tracks && b.tracks.total || 0) - (a.tracks && a.tracks.total || 0);
+        });
+        // Desa les playlists per usar-les a confirmPlaylists
+        window._allFetchedPlaylists = playlists;
+
+        picker.innerHTML = playlists.map(function(pl) {
+            return '<label class="playlist-item">' +
+                '<input type="checkbox" value="' + pl.id + '" checked>' +
+                '<span class="playlist-item-name">' + escHtml(pl.name) + '</span>' +
+                '<span class="playlist-item-count">' + (pl.tracks && pl.tracks.total || 0) + ' cançons</span>' +
+                '</label>';
+        }).join('');
+    } catch(e) {
+        picker.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px">No s\'han pogut carregar les llistes. Es faran servir totes.</div>';
+        window._allFetchedPlaylists = [];
+    }
+}
+
+function toggleAllPlaylists() {
+    var boxes = document.querySelectorAll('#playlist-picker input[type=checkbox]');
+    var anyChecked = Array.from(boxes).some(function(b) { return b.checked; });
+    boxes.forEach(function(b) { b.checked = !anyChecked; });
+}
+
+function confirmPlaylists() {
+    var boxes = document.querySelectorAll('#playlist-picker input[type=checkbox]');
+    var selected = Array.from(boxes).filter(function(b) { return b.checked; }).map(function(b) { return b.value; });
+    config.selectedPlaylistIds = selected.length ? selected : null;
+    sessionStorage.setItem('ct_config', JSON.stringify(config));
+    mainFlow();
 }
 
 async function startAuth() {
@@ -841,21 +920,17 @@ async function getAllArtists() {
 
     await sleep(1000);  // pausa llarga entre fases
 
-    // 3. Totes les playlists de l'usuari (si falla per 429, continuem sense playlists)
-    setLoading('Carregant llistes de reproducció...');
-    var playlists = [];
-    try {
-        var plUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
-        while (plUrl) {
-            var plData = await spotifyFetch(plUrl);
-            playlists = playlists.concat(plData.items.filter(function(p) { return p; }));
-            plUrl = plData.next;
-            if (plUrl) await sleep(400);  // pausa entre pàgines
-        }
-    } catch (e) {
-        console.warn('No s\'han pogut llegir les playlists (rate limit?):', e.message);
-        setLoading('Playlists no disponibles, continuant amb artistes seguits...');
-        await sleep(1000);
+    // 3. Playlists seleccionades per l'usuari al pas de configuració
+    //    (ja les tenim carregades; només cal filtrar per les seleccionades)
+    var allFetched = window._allFetchedPlaylists || [];
+    var playlists;
+    if (config.selectedPlaylistIds && config.selectedPlaylistIds.length) {
+        var sel = new Set(config.selectedPlaylistIds);
+        playlists = allFetched.filter(function(p) { return sel.has(p.id); });
+        setLoading('Analitzant ' + playlists.length + ' llistes seleccionades...');
+    } else {
+        playlists = allFetched;
+        setLoading('Analitzant totes les llistes (' + playlists.length + ')...');
     }
 
     // 4. Extreure artistes de cada playlist
@@ -1428,7 +1503,7 @@ async function mainFlow() {
 
     if (urlParams.has('code')) {
         var ok = await handleCallback();
-        if (ok) { await mainFlow(); return; }
+        if (ok) { await showPlaylistStep(); return; }
     }
 
     var savedToken  = sessionStorage.getItem('ct_token');
