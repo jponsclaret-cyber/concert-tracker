@@ -1004,7 +1004,16 @@ async function searchConcerts(artistName, artistImage) {
         const data = await res.json();
         if (!data._embedded || !data._embedded.events) return [];
 
-        return data._embedded.events.map(function(ev) {
+        var artistLower = artistName.toLowerCase();
+        return data._embedded.events.filter(function(ev) {
+            // Filtre de fals positius: l'artista ha d'aparèixer a les atraccions oficials
+            // (evita que "Muse" coincideixi amb el venue "The Muse", etc.)
+            var attractions = ev._embedded && ev._embedded.attractions;
+            if (!attractions || !attractions.length) return true; // sense dades → acceptem
+            return attractions.some(function(att) {
+                return att.name && att.name.toLowerCase().indexOf(artistLower) !== -1;
+            });
+        }).map(function(ev) {
             const venue      = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
             const priceRange = ev.priceRanges && ev.priceRanges[0];
             const imgs       = ev.images || [];
