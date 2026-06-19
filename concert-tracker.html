@@ -371,6 +371,15 @@
         .playlist-item-name { font-size: 13px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .playlist-item-count { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
         .playlist-select-all { font-size: 12px; color: var(--accent); cursor: pointer; margin-bottom: 8px; display: inline-block; }
+        .manual-artist-section { margin-top: 16px; }
+        .manual-artist-section h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+        .manual-artist-input-row { display: flex; gap: 8px; }
+        .manual-artist-input-row input { flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+        .manual-artist-input-row input:focus { outline: none; border-color: var(--accent); }
+        .manual-artist-input-row button { background: var(--accent); color: #000; border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .manual-artist-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .manual-artist-tag { background: var(--bg-hover); border: 1px solid var(--accent); border-radius: 20px; padding: 4px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+        .manual-artist-tag-remove { cursor: pointer; color: var(--text-muted); font-weight: 700; line-height: 1; }
 
         /* ── ERROR / EMPTY ─────────────────────── */
         .error-banner {
@@ -455,7 +464,17 @@
             <p>Marca les llistes que vols incloure en la cerca d'artistes. Les llistes amb més cançons apareixen primer.</p>
             <span class="playlist-select-all" onclick="toggleAllPlaylists()">Seleccionar / deseleccionar totes</span>
             <div class="playlist-list" id="playlist-picker"></div>
-            <button class="btn btn-primary" onclick="confirmPlaylists()">Busca concerts &rarr;</button>
+
+            <div class="manual-artist-section">
+                <h3>Afegir artista manualment</h3>
+                <div class="manual-artist-input-row">
+                    <input type="text" id="manual-artist-input" placeholder="p.ex. Hans Zimmer" onkeydown="if(event.key==='Enter')addManualArtist()">
+                    <button onclick="addManualArtist()">Afegir</button>
+                </div>
+                <div class="manual-artist-tags" id="manual-artist-tags"></div>
+            </div>
+
+            <button class="btn btn-primary" style="margin-top:16px" onclick="confirmPlaylists()">Busca concerts &rarr;</button>
         </div>
     </div>
 </div>
@@ -685,6 +704,10 @@ async function showPlaylistStep() {
     document.getElementById('app-screen').style.display   = 'none';
     goToStep(2);
 
+    // Restaurar artistes manuals de la sessió anterior
+    _manualArtists = Array.isArray(config.manualArtists) ? config.manualArtists.slice() : [];
+    renderManualArtistTags();
+
     var picker = document.getElementById('playlist-picker');
 
     // Sempre renderitzem els dos checkboxes principals (independents de l'API de playlists)
@@ -735,14 +758,43 @@ function toggleAllPlaylists() {
     boxes.forEach(function(b) { b.checked = !anyChecked; });
 }
 
+var _manualArtists = [];
+
+function addManualArtist() {
+    var input = document.getElementById('manual-artist-input');
+    var name = input.value.trim();
+    if (!name) return;
+    if (_manualArtists.indexOf(name) !== -1) { input.value = ''; return; }
+    _manualArtists.push(name);
+    input.value = '';
+    renderManualArtistTags();
+}
+
+function removeManualArtist(name) {
+    _manualArtists = _manualArtists.filter(function(n) { return n !== name; });
+    renderManualArtistTags();
+}
+
+function renderManualArtistTags() {
+    var container = document.getElementById('manual-artist-tags');
+    if (!container) return;
+    container.innerHTML = _manualArtists.map(function(name) {
+        return '<span class="manual-artist-tag">' +
+            escHtml(name) +
+            '<span class="manual-artist-tag-remove" onclick="removeManualArtist(' + JSON.stringify(name) + ')">✕</span>' +
+            '</span>';
+    }).join('');
+}
+
 function confirmPlaylists() {
     config.includeFollowed = document.getElementById('inc-followed') ? document.getElementById('inc-followed').checked : false;
     config.includeLiked    = document.getElementById('inc-liked')    ? document.getElementById('inc-liked').checked    : false;
     var boxes = document.querySelectorAll('#playlist-picker .pl-check');
     var selected = Array.from(boxes).filter(function(b) { return b.checked; }).map(function(b) { return b.value; });
     config.selectedPlaylistIds = selected;
+    config.manualArtists = _manualArtists.slice();
 
-    if (!config.includeFollowed && !config.includeLiked && selected.length === 0) {
+    if (!config.includeFollowed && !config.includeLiked && selected.length === 0 && _manualArtists.length === 0) {
         alert('Selecciona almenys una font d\'artistes per buscar concerts.');
         return;
     }
@@ -976,6 +1028,30 @@ async function getAllArtists() {
     nameById.forEach(function(name, id) {
         if (!artistMap.has(id)) artistMap.set(id, { id: id, name: name, images: [] });
     });
+
+    // 7. Artistes afegits manualment → busquem a Spotify per obtenir ID i imatge
+    var manuals = Array.isArray(config.manualArtists) ? config.manualArtists : [];
+    for (var m = 0; m < manuals.length; m++) {
+        var manualName = manuals[m];
+        setLoading('Buscant artista manual: ' + manualName + '...');
+        try {
+            var srData = await spotifyFetch('https://api.spotify.com/v1/search?q=' + encodeURIComponent(manualName) + '&type=artist&limit=1');
+            var items = srData && srData.artists && srData.artists.items;
+            if (items && items.length > 0) {
+                var found = items[0];
+                if (!artistMap.has(found.id)) artistMap.set(found.id, found);
+            } else {
+                // Spotify no troba l'artista → l'afegim amb el nom igualment per Ticketmaster
+                var fakeId = 'manual_' + m;
+                if (!artistMap.has(fakeId)) artistMap.set(fakeId, { id: fakeId, name: manualName, images: [] });
+            }
+        } catch(e) {
+            console.warn('No s\'ha pogut buscar l\'artista manual "' + manualName + '":', e.message);
+            var fakeId = 'manual_' + m;
+            if (!artistMap.has(fakeId)) artistMap.set(fakeId, { id: fakeId, name: manualName, images: [] });
+        }
+        if (m < manuals.length - 1) await sleep(300);
+    }
 
     return Array.from(artistMap.values());
 }
@@ -1456,7 +1532,8 @@ async function mainFlow() {
     // Guard: si no hi ha cap font seleccionada, torna al pas de selecció
     var noSource = config.includeFollowed !== true &&
                    config.includeLiked !== true &&
-                   (!Array.isArray(config.selectedPlaylistIds) || config.selectedPlaylistIds.length === 0);
+                   (!Array.isArray(config.selectedPlaylistIds) || config.selectedPlaylistIds.length === 0) &&
+                   (!Array.isArray(config.manualArtists) || config.manualArtists.length === 0);
     if (noSource) {
         await showPlaylistStep();
         return;
