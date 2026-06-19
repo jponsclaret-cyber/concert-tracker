@@ -686,7 +686,20 @@ async function showPlaylistStep() {
     goToStep(2);
 
     var picker = document.getElementById('playlist-picker');
-    picker.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px">Carregant llistes...</div>';
+
+    // Sempre renderitzem els dos checkboxes principals (independents de l'API de playlists)
+    picker.innerHTML =
+        '<label class="playlist-item" style="background:var(--bg-hover)">' +
+        '<input type="checkbox" id="inc-followed">' +
+        '<span class="playlist-item-name">⭐ Artistes que segueixo</span>' +
+        '<span class="playlist-item-count">seguits</span>' +
+        '</label>' +
+        '<label class="playlist-item" style="background:var(--bg-hover)">' +
+        '<input type="checkbox" id="inc-liked">' +
+        '<span class="playlist-item-name">❤️ Cançons que m\'agraden</span>' +
+        '<span class="playlist-item-count">fins 500</span>' +
+        '</label>' +
+        '<div id="pl-loading" style="padding:12px 14px;color:var(--text-muted);font-size:13px">Carregant llistes...</div>';
 
     try {
         var playlists = [];
@@ -697,33 +710,21 @@ async function showPlaylistStep() {
             url = data.next;
             if (url) await sleep(300);
         }
-        // Ordena per nombre de cançons (descendent) — proxy de llista més escoltada
         playlists.sort(function(a, b) {
             return (b.tracks && b.tracks.total || 0) - (a.tracks && a.tracks.total || 0);
         });
-        // Desa les playlists per usar-les a confirmPlaylists
         window._allFetchedPlaylists = playlists;
 
-        picker.innerHTML =
-            '<label class="playlist-item" style="background:var(--bg-hover)">' +
-            '<input type="checkbox" id="inc-followed" checked>' +
-            '<span class="playlist-item-name">⭐ Artistes que segueixo</span>' +
-            '<span class="playlist-item-count">seguits</span>' +
-            '</label>' +
-            '<label class="playlist-item" style="background:var(--bg-hover)">' +
-            '<input type="checkbox" id="inc-liked" checked>' +
-            '<span class="playlist-item-name">❤️ Cançons que m\'agraden</span>' +
-            '<span class="playlist-item-count">fins 500</span>' +
-            '</label>' +
-            playlists.map(function(pl) {
-                return '<label class="playlist-item">' +
-                    '<input type="checkbox" class="pl-check" value="' + pl.id + '" checked>' +
-                    '<span class="playlist-item-name">' + escHtml(pl.name) + '</span>' +
-                    '<span class="playlist-item-count">' + (pl.tracks && pl.tracks.total || 0) + ' cançons</span>' +
-                    '</label>';
-            }).join('');
+        document.getElementById('pl-loading').outerHTML = playlists.map(function(pl) {
+            return '<label class="playlist-item">' +
+                '<input type="checkbox" class="pl-check" value="' + pl.id + '">' +
+                '<span class="playlist-item-name">' + escHtml(pl.name) + '</span>' +
+                '<span class="playlist-item-count">' + (pl.tracks && pl.tracks.total || 0) + ' cançons</span>' +
+                '</label>';
+        }).join('');
     } catch(e) {
-        picker.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px">No s\'han pogut carregar les llistes. Es faran servir totes.</div>';
+        var el = document.getElementById('pl-loading');
+        if (el) el.textContent = 'No s\'han pogut carregar les llistes de reproducció.';
         window._allFetchedPlaylists = [];
     }
 }
@@ -735,13 +736,18 @@ function toggleAllPlaylists() {
 }
 
 function confirmPlaylists() {
-    config.includeFollowed = document.getElementById('inc-followed') ? document.getElementById('inc-followed').checked : true;
-    config.includeLiked    = document.getElementById('inc-liked')    ? document.getElementById('inc-liked').checked    : true;
+    config.includeFollowed = document.getElementById('inc-followed') ? document.getElementById('inc-followed').checked : false;
+    config.includeLiked    = document.getElementById('inc-liked')    ? document.getElementById('inc-liked').checked    : false;
     var boxes = document.querySelectorAll('#playlist-picker .pl-check');
     var selected = Array.from(boxes).filter(function(b) { return b.checked; }).map(function(b) { return b.value; });
-    config.selectedPlaylistIds = selected;  // array buit = res seleccionat (no null)
+    config.selectedPlaylistIds = selected;
+
+    if (!config.includeFollowed && !config.includeLiked && selected.length === 0) {
+        alert('Selecciona almenys una font d\'artistes per buscar concerts.');
+        return;
+    }
+
     sessionStorage.setItem('ct_config', JSON.stringify(config));
-    localStorage.removeItem(CACHE_KEY);  // invalida caché perquè la selecció pot haver canviat
     mainFlow();
 }
 
@@ -822,26 +828,8 @@ async function handleCallback() {
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   ARTIST CACHE (localStorage, 24h TTL)
-═══════════════════════════════════════════════════════════════ */
-var CACHE_KEY = 'ct_artists_v1';
-var CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hores
-
-function getCachedArtists() {
-    try {
-        var raw = localStorage.getItem(CACHE_KEY);
-        if (!raw) return null;
-        var obj = JSON.parse(raw);
-        if (Date.now() - obj.ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY); return null; }
-        return obj.artists;
-    } catch(e) { return null; }
-}
-
-function setCachedArtists(artists) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), artists: artists })); }
-    catch(e) {}
-}
+// Neteja caché antiga si existeix
+try { localStorage.removeItem('ct_artists_v1'); } catch(e) {}
 
 /* ═══════════════════════════════════════════════════════════════
    SPOTIFY API
@@ -881,13 +869,6 @@ async function getFollowedArtists() {
 }
 
 async function getAllArtists() {
-    // Serveix des de caché si és fresca (< 24h)
-    var cached = getCachedArtists();
-    if (cached && cached.length) {
-        setLoading('Artistes carregats des de caché (' + cached.length + ')');
-        return cached;
-    }
-
     const artistMap = new Map();
 
     var nameById = new Map();
@@ -899,7 +880,7 @@ async function getAllArtists() {
     }
 
     // 1. Artistes seguits (opcional)
-    if (config.includeFollowed !== false) {
+    if (config.includeFollowed === true) {
         setLoading('Carregant artistes seguits...');
         var followUrl = 'https://api.spotify.com/v1/me/following?type=artist&limit=50';
         try {
@@ -913,7 +894,7 @@ async function getAllArtists() {
     }
 
     // 2. Cançons que m'agraden (opcional) — màx. 500 cançons (10 pàgines)
-    if (config.includeLiked !== false) {
+    if (config.includeLiked === true) {
         setLoading('Carregant cançons que t\'agraden...');
         var likedUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
         var likedPages = 0;
@@ -939,9 +920,9 @@ async function getAllArtists() {
     var allFetched = window._allFetchedPlaylists || [];
     var playlists;
     if (!Array.isArray(config.selectedPlaylistIds)) {
-        // Sessió antiga sense pas de selecció → usa totes les llistes
-        playlists = allFetched;
-        setLoading('Analitzant totes les llistes (' + playlists.length + ')...');
+        // Sessió antiga sense pas de selecció → cap llista
+        playlists = [];
+        setLoading('Cap llista configurada...');
     } else if (config.selectedPlaylistIds.length === 0) {
         // L'usuari no ha seleccionat cap llista → cap
         playlists = [];
@@ -996,9 +977,7 @@ async function getAllArtists() {
         if (!artistMap.has(id)) artistMap.set(id, { id: id, name: name, images: [] });
     });
 
-    var result = Array.from(artistMap.values());
-    setCachedArtists(result);  // desa a caché 24h
-    return result;
+    return Array.from(artistMap.values());
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1465,6 +1444,15 @@ function logout() {
    MAIN FLOW
 ═══════════════════════════════════════════════════════════════ */
 async function mainFlow() {
+    // Guard: si no hi ha cap font seleccionada, torna al pas de selecció
+    var noSource = config.includeFollowed !== true &&
+                   config.includeLiked !== true &&
+                   (!Array.isArray(config.selectedPlaylistIds) || config.selectedPlaylistIds.length === 0);
+    if (noSource) {
+        await showPlaylistStep();
+        return;
+    }
+
     document.getElementById('app-screen').style.display   = 'block';
     document.getElementById('setup-screen').style.display = 'none';
 
@@ -1531,7 +1519,7 @@ async function mainFlow() {
     if (savedToken && savedConfig) {
         accessToken = savedToken;
         config      = JSON.parse(savedConfig);
-        await mainFlow();
+        await showPlaylistStep();
         return;
     }
 
