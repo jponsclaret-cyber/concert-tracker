@@ -1057,43 +1057,65 @@ async function getAllArtists() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TICKETMASTER API
+   TICKETMASTER API  (attractionId → events, size 200)
 ═══════════════════════════════════════════════════════════════ */
-async function searchConcerts(artistName, artistImage) {
-    const now      = new Date();
-    const today    = now.toISOString().slice(0,10) + 'T00:00:00Z';
-    const nextYear = new Date(now.getTime() + 365*24*60*60*1000).toISOString().slice(0,10) + 'T23:59:59Z';
+async function getTMAttractionId(artistName) {
+    try {
+        var res = await fetch(
+            'https://app.ticketmaster.com/discovery/v2/attractions.json?' +
+            new URLSearchParams({ apikey: config.tmKey, keyword: artistName, classificationName: 'Music', size: '5' })
+        );
+        if (!res.ok) return null;
+        var data = await res.json();
+        var list = data._embedded && data._embedded.attractions;
+        if (!list || !list.length) return null;
+        var lname = artistName.toLowerCase();
+        var exact = list.find(function(a) { return a.name && a.name.toLowerCase() === lname; });
+        return (exact || list[0]).id;
+    } catch(e) { return null; }
+}
 
-    const params = new URLSearchParams({
+async function searchConcertsTM(artistName, artistImage, attractionId) {
+    var now      = new Date();
+    var today    = now.toISOString().slice(0,10) + 'T00:00:00Z';
+    var nextYear = new Date(now.getTime() + 365*24*60*60*1000).toISOString().slice(0,10) + 'T23:59:59Z';
+
+    var params = {
         apikey:             config.tmKey,
-        keyword:            artistName,
         classificationName: 'Music',
         startDateTime:      today,
         endDateTime:        nextYear,
-        size:               '20',
+        size:               '200',
         sort:               'date,asc',
-    });
+    };
+    if (attractionId) {
+        params.attractionId = attractionId;
+    } else {
+        params.keyword = artistName;
+    }
 
     try {
-        const res  = await fetch('https://app.ticketmaster.com/discovery/v2/events.json?' + params);
+        var res  = await fetch('https://app.ticketmaster.com/discovery/v2/events.json?' + new URLSearchParams(params));
         if (!res.ok) return [];
-        const data = await res.json();
+        var data = await res.json();
         if (!data._embedded || !data._embedded.events) return [];
 
-        var artistLower = artistName.toLowerCase();
-        return data._embedded.events.filter(function(ev) {
-            // Filtre de fals positius: l'artista ha d'aparèixer a les atraccions oficials
-            // (evita que "Muse" coincideixi amb el venue "The Muse", etc.)
-            var attractions = ev._embedded && ev._embedded.attractions;
-            if (!attractions || !attractions.length) return true; // sense dades → acceptem
-            return attractions.some(function(att) {
-                return att.name && att.name.toLowerCase().indexOf(artistLower) !== -1;
+        var events = data._embedded.events;
+        // Filtre de fals positius només si no tenim attractionId precís
+        if (!attractionId) {
+            var artistLower = artistName.toLowerCase();
+            events = events.filter(function(ev) {
+                var att = ev._embedded && ev._embedded.attractions;
+                if (!att || !att.length) return true;
+                return att.some(function(a) { return a.name && a.name.toLowerCase().indexOf(artistLower) !== -1; });
             });
-        }).map(function(ev) {
-            const venue      = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
-            const priceRange = ev.priceRanges && ev.priceRanges[0];
-            const imgs       = ev.images || [];
-            const img        = imgs.find(function(i) { return i.ratio === '16_9' && i.width > 500; }) || imgs[0];
+        }
+
+        return events.map(function(ev) {
+            var venue      = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
+            var priceRange = ev.priceRanges && ev.priceRanges[0];
+            var imgs       = ev.images || [];
+            var img        = imgs.find(function(i) { return i.ratio === '16_9' && i.width > 500; }) || imgs[0];
             return {
                 id:          ev.id,
                 name:        ev.name,
@@ -1109,6 +1131,7 @@ async function searchConcerts(artistName, artistImage) {
                 currency:    priceRange && priceRange.currency,
                 url:         ev.url,
                 image:       (img && img.url) || artistImage,
+                source:      'ticketmaster',
             };
         });
     } catch(e) {
@@ -1118,23 +1141,100 @@ async function searchConcerts(artistName, artistImage) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BATCH SEARCH — 4 concurrent, 300ms delay between batches
+   BANDSINTOWN API  (font secundària sense clau)
+═══════════════════════════════════════════════════════════════ */
+async function searchConcertsBIT(artistName, artistImage) {
+    try {
+        var res = await fetch(
+            'https://rest.bandsintown.com/artists/' + encodeURIComponent(artistName) + '/events?app_id=concert-tracker&date=upcoming',
+            { headers: { 'Accept': 'application/json' } }
+        );
+        if (!res.ok) return [];
+        var data = await res.json();
+        if (!Array.isArray(data)) return [];
+        var now = new Date();
+        var oneYear = new Date(now.getTime() + 365*24*60*60*1000);
+        return data
+            .filter(function(ev) {
+                if (!ev.datetime) return false;
+                var d = new Date(ev.datetime);
+                return d >= now && d <= oneYear;
+            })
+            .map(function(ev) {
+                var venue = ev.venue || {};
+                var dt = ev.datetime ? ev.datetime.slice(0, 10) : null;
+                var tm = ev.datetime && ev.datetime.length > 10 ? ev.datetime.slice(11, 16) : null;
+                if (tm === '00:00') tm = null;
+                var offersUrl = ev.offers && ev.offers[0] && ev.offers[0].url;
+                return {
+                    id:          'bit_' + ev.id,
+                    name:        ev.title || artistName,
+                    artist:      artistName,
+                    artistImage: artistImage,
+                    date:        dt,
+                    time:        tm,
+                    venue:       venue.name,
+                    city:        venue.city,
+                    country:     venue.country,
+                    countryCode: null,
+                    minPrice:    null,
+                    currency:    null,
+                    url:         offersUrl || ev.url,
+                    image:       artistImage,
+                    source:      'bandsintown',
+                };
+            });
+    } catch(e) {
+        console.warn('BIT error for', artistName, e);
+        return [];
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CERCA COMBINADA  TM + Bandsintown, deduplicada per data+ciutat
+═══════════════════════════════════════════════════════════════ */
+async function searchConcertsAll(artistName, artistImage) {
+    // attractionId i BIT en paral·lel; TM events espera l'ID
+    var parallel = await Promise.all([
+        getTMAttractionId(artistName),
+        searchConcertsBIT(artistName, artistImage),
+    ]);
+    var attractionId = parallel[0];
+    var bit          = parallel[1];
+
+    await sleep(150);
+    var tm = await searchConcertsTM(artistName, artistImage, attractionId);
+
+    // Afegim de BIT els concerts que TM no té (dedup per data+ciutat)
+    var tmKeys = new Set(tm.map(function(c) {
+        return (c.date || '') + '|' + (c.city || '').toLowerCase().trim();
+    }));
+    var newFromBit = bit.filter(function(c) {
+        var key = (c.date || '') + '|' + (c.city || '').toLowerCase().trim();
+        return !tmKeys.has(key);
+    });
+
+    return tm.concat(newFromBit);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BATCH SEARCH — 3 concurrent, 400ms delay between batches
 ═══════════════════════════════════════════════════════════════ */
 function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
 async function fetchAllConcerts(artists, onProgress) {
     const concerts = [];
-    const BATCH    = 4;
+    const BATCH    = 3;
     for (let i = 0; i < artists.length; i += BATCH) {
         const batch   = artists.slice(i, i + BATCH);
         const results = await Promise.all(
             batch.map(function(a) {
-                return searchConcerts(a.name, a.images && a.images[0] && a.images[0].url || '');
+                return searchConcertsAll(a.name, a.images && a.images[0] && a.images[0].url || '');
             })
         );
         results.forEach(function(r) { concerts.push.apply(concerts, r); });
         onProgress(i + batch.length, artists.length, concerts.length);
-        if (i + BATCH < artists.length) await sleep(300);
+        if (i + BATCH < artists.length) await sleep(400);
     }
     return concerts;
 }
