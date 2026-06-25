@@ -1172,80 +1172,12 @@ async function searchConcertsTM(artistName, artistImage, attractionId) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BANDSINTOWN API  (font secundària sense clau)
-═══════════════════════════════════════════════════════════════ */
-async function searchConcertsBIT(artistName, artistImage) {
-    try {
-        var res = await fetch(
-            'https://rest.bandsintown.com/artists/' + encodeURIComponent(artistName) + '/events?app_id=concert-tracker&date=upcoming',
-            { headers: { 'Accept': 'application/json' } }
-        );
-        if (!res.ok) return [];
-        var data = await res.json();
-        if (!Array.isArray(data)) return [];
-        var now = new Date();
-        var oneYear = new Date(now.getTime() + 365*24*60*60*1000);
-        return data
-            .filter(function(ev) {
-                if (!ev.datetime) return false;
-                var d = new Date(ev.datetime);
-                return d >= now && d <= oneYear;
-            })
-            .map(function(ev) {
-                var venue = ev.venue || {};
-                var dt = ev.datetime ? ev.datetime.slice(0, 10) : null;
-                var tm = ev.datetime && ev.datetime.length > 10 ? ev.datetime.slice(11, 16) : null;
-                if (tm === '00:00') tm = null;
-                var offersUrl = ev.offers && ev.offers[0] && ev.offers[0].url;
-                return {
-                    id:          'bit_' + ev.id,
-                    name:        ev.title || artistName,
-                    artist:      artistName,
-                    artistImage: artistImage,
-                    date:        dt,
-                    time:        tm,
-                    venue:       venue.name,
-                    city:        venue.city,
-                    country:     venue.country,
-                    countryCode: null,
-                    minPrice:    null,
-                    currency:    null,
-                    url:         offersUrl || ev.url,
-                    image:       artistImage,
-                    source:      'bandsintown',
-                };
-            });
-    } catch(e) {
-        console.warn('BIT error for', artistName, e);
-        return [];
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   CERCA COMBINADA  TM + Bandsintown, deduplicada per data+ciutat
+   CERCA per artista — Ticketmaster amb attractionId precís
 ═══════════════════════════════════════════════════════════════ */
 async function searchConcertsAll(artistName, artistImage) {
-    // attractionId i BIT en paral·lel; TM events espera l'ID
-    var parallel = await Promise.all([
-        getTMAttractionId(artistName),
-        searchConcertsBIT(artistName, artistImage),
-    ]);
-    var attractionId = parallel[0];
-    var bit          = parallel[1];
-
+    var attractionId = await getTMAttractionId(artistName);
     await sleep(150);
-    var tm = await searchConcertsTM(artistName, artistImage, attractionId);
-
-    // Afegim de BIT els concerts que TM no té (dedup per data+ciutat)
-    var tmKeys = new Set(tm.map(function(c) {
-        return (c.date || '') + '|' + (c.city || '').toLowerCase().trim();
-    }));
-    var newFromBit = bit.filter(function(c) {
-        var key = (c.date || '') + '|' + (c.city || '').toLowerCase().trim();
-        return !tmKeys.has(key);
-    });
-
-    return tm.concat(newFromBit);
+    return searchConcertsTM(artistName, artistImage, attractionId);
 }
 
 /* ═══════════════════════════════════════════════════════════════
