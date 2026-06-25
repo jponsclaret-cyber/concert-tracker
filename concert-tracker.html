@@ -1057,6 +1057,33 @@ async function getAllArtists() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   FILTRE ANTI-TRIBUT
+═══════════════════════════════════════════════════════════════ */
+var TRIBUTE_WORDS = [
+    'tribute', 'tributo', 'tribut', 'homenaje', 'homenatge', 'homage',
+    'cover band', 'covers', 'experience', 'celebrating the music of',
+    'performed by', 'as performed', 'in the style of', 'reimagined',
+    'symphonic tribute', 'a tribute to', 'tribute to', 'tribute band',
+    'vs ', ' meets '
+];
+
+function isTributeEvent(ev, artistName) {
+    var hay = (ev.name || '').toLowerCase();
+    var att = ev._embedded && ev._embedded.attractions;
+    if (att && att.length) {
+        att.forEach(function(a) { if (a.name) hay += ' ' + a.name.toLowerCase(); });
+    }
+    var lname = artistName.toLowerCase();
+    for (var i = 0; i < TRIBUTE_WORDS.length; i++) {
+        var w = TRIBUTE_WORDS[i];
+        // El concert oficial pot dir-se exactament com l'artista; només marquem
+        // com a tribut si la paraula clau NO forma part del propi nom de l'artista.
+        if (hay.indexOf(w) !== -1 && lname.indexOf(w) === -1) return true;
+    }
+    return false;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    TICKETMASTER API  (attractionId → events, size 200)
 ═══════════════════════════════════════════════════════════════ */
 async function getTMAttractionId(artistName) {
@@ -1110,6 +1137,10 @@ async function searchConcertsTM(artistName, artistImage, attractionId) {
                 return att.some(function(a) { return a.name && a.name.toLowerCase().indexOf(artistLower) !== -1; });
             });
         }
+
+        // Filtre anti-tribut: descarta concerts homenatge encara que tinguin
+        // l'attractionId correcte o coincideixin pel nom.
+        events = events.filter(function(ev) { return !isTributeEvent(ev, artistName); });
 
         return events.map(function(ev) {
             var venue      = ev._embedded && ev._embedded.venues && ev._embedded.venues[0];
