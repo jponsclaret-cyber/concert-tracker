@@ -392,6 +392,37 @@
         .empty-state .empty-icon { font-size: 64px; margin-bottom: 16px; }
         .empty-state h2 { font-size: 20px; color: var(--text-primary); margin-bottom: 8px; }
 
+        /* ── ADD MODAL ─────────────────────────── */
+        .add-modal {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.96);
+            width: 460px; max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 64px); overflow-y: auto;
+            background: var(--bg-secondary);
+            border-radius: 16px; z-index: 201;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+            display: none; opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        .add-modal.open { display: block; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .add-modal-header {
+            position: sticky; top: 0; background: var(--bg-secondary);
+            padding: 18px 24px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 15px; font-weight: 700;
+        }
+        .add-modal-body { padding: 24px; }
+        .add-modal-body .form-group input,
+        .add-modal-body .form-group select {
+            width: 100%; background: var(--bg-card);
+            border: 2px solid var(--border); border-radius: 8px;
+            padding: 12px 14px; color: var(--text-primary);
+            font-size: 14px; font-family: inherit;
+        }
+        .add-modal-body .form-group input:focus,
+        .add-modal-body .form-group select:focus { outline: none; border-color: var(--accent); }
+        .add-row { display: flex; gap: 12px; }
+
         @media (max-width: 600px) {
             .app-header { padding: 16px; }
             .app-content { padding: 0 16px 32px; }
@@ -490,6 +521,7 @@
                 <div class="user-avatar" id="user-avatar">?</div>
                 <span id="user-name" style="font-size:13px;font-weight:600"></span>
             </div>
+            <button class="btn-sm" style="background:var(--accent);color:#000" onclick="openAddConcert()">+ Afegir concert</button>
             <button class="btn-sm outline" onclick="logout()">Sortir</button>
         </div>
     </header>
@@ -537,6 +569,56 @@
     </div>
 
     <div class="app-content" id="concerts-container"></div>
+</div>
+
+<!-- ╔══════════════════════════════════════════╗
+     ║  MODAL AFEGIR CONCERT                    ║
+     ╚══════════════════════════════════════════╝ -->
+<div class="panel-overlay" id="add-overlay" onclick="closeAddConcert()"></div>
+<div class="add-modal" id="add-modal">
+    <div class="add-modal-header">
+        <span>Afegir concert manualment</span>
+        <button class="panel-close" onclick="closeAddConcert()">&#10005;</button>
+    </div>
+    <div class="add-modal-body">
+        <div class="form-group">
+            <label>Artista *</label>
+            <input type="text" id="ac-artist" placeholder="p.ex. Linkin Park">
+        </div>
+        <div class="add-row">
+            <div class="form-group" style="flex:1">
+                <label>Data *</label>
+                <input type="date" id="ac-date">
+            </div>
+            <div class="form-group" style="width:120px">
+                <label>Hora</label>
+                <input type="time" id="ac-time">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Recinte (venue)</label>
+            <input type="text" id="ac-venue" placeholder="p.ex. Ippodromo delle Cascine">
+        </div>
+        <div class="add-row">
+            <div class="form-group" style="flex:1">
+                <label>Ciutat</label>
+                <input type="text" id="ac-city" placeholder="p.ex. Florence">
+            </div>
+            <div class="form-group" style="flex:1">
+                <label>País</label>
+                <select id="ac-country"></select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Enllaç entrades (opcional)</label>
+            <input type="text" id="ac-url" placeholder="https://...">
+        </div>
+        <div class="form-group">
+            <label>URL imatge (opcional)</label>
+            <input type="text" id="ac-image" placeholder="https://...">
+        </div>
+        <button class="btn btn-primary" onclick="saveAddConcert()">Afegir concert</button>
+    </div>
 </div>
 
 <!-- ╔══════════════════════════════════════════╗
@@ -1462,6 +1544,99 @@ function computeStay(dateStr) {
     return { checkin: checkin, checkout: checkout, nights: after - before };
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   CONCERTS MANUALS  (desats a localStorage, persistents)
+═══════════════════════════════════════════════════════════════ */
+// Valors = noms anglesos (coincideixen amb els mapes de continents/aeroports);
+// etiquetes = català. Codi ISO2 per al filtre de continent.
+var MANUAL_COUNTRIES = [
+    ['', 'ES', '— Sense país —'],
+    ['Spain','ES','Espanya'], ['France','FR','França'], ['Italy','IT','Itàlia'],
+    ['Portugal','PT','Portugal'], ['Germany','DE','Alemanya'], ['United Kingdom','GB','Regne Unit'],
+    ['Netherlands','NL','Països Baixos'], ['Belgium','BE','Bèlgica'], ['Switzerland','CH','Suïssa'],
+    ['Austria','AT','Àustria'], ['Sweden','SE','Suècia'], ['Norway','NO','Noruega'],
+    ['Denmark','DK','Dinamarca'], ['Finland','FI','Finlàndia'], ['Poland','PL','Polònia'],
+    ['Czech Republic','CZ','Txèquia'], ['Hungary','HU','Hongria'], ['Greece','GR','Grècia'],
+    ['Ireland','IE','Irlanda'], ['Croatia','HR','Croàcia'], ['Romania','RO','Romania'],
+    ['United States','US','Estats Units'], ['Canada','CA','Canadà'], ['Mexico','MX','Mèxic'],
+    ['Brazil','BR','Brasil'], ['Argentina','AR','Argentina'], ['Chile','CL','Xile'],
+    ['Japan','JP','Japó'], ['South Korea','KR','Corea del Sud'], ['Australia','AU','Austràlia'],
+];
+
+function loadManualConcerts() {
+    try { return JSON.parse(localStorage.getItem('ct_manual') || '[]'); }
+    catch(e) { return []; }
+}
+function saveManualConcerts(arr) {
+    try { localStorage.setItem('ct_manual', JSON.stringify(arr)); } catch(e) {}
+}
+
+function openAddConcert() {
+    var sel = document.getElementById('ac-country');
+    sel.innerHTML = MANUAL_COUNTRIES.map(function(c) {
+        return '<option value="' + c[0] + '|' + c[1] + '">' + escHtml(c[2]) + '</option>';
+    }).join('');
+    ['ac-artist','ac-date','ac-time','ac-venue','ac-city','ac-url','ac-image'].forEach(function(id) {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('add-overlay').classList.add('open');
+    document.getElementById('add-modal').classList.add('open');
+}
+function closeAddConcert() {
+    document.getElementById('add-overlay').classList.remove('open');
+    document.getElementById('add-modal').classList.remove('open');
+}
+
+function saveAddConcert() {
+    var artist = document.getElementById('ac-artist').value.trim();
+    var date   = document.getElementById('ac-date').value;
+    if (!artist || !date) { alert('Artista i data són obligatoris.'); return; }
+
+    var countryVal = document.getElementById('ac-country').value.split('|');
+    var country     = countryVal[0] || null;
+    var countryCode = countryVal[1] || null;
+
+    var concert = {
+        id:          'manual_' + Date.now() + '_' + Math.round(Math.random() * 1e6),
+        name:        artist,
+        artist:      artist,
+        artistImage: '',
+        date:        date,
+        time:        document.getElementById('ac-time').value || null,
+        venue:       document.getElementById('ac-venue').value.trim() || null,
+        city:        document.getElementById('ac-city').value.trim() || null,
+        country:     country,
+        countryCode: countryCode,
+        minPrice:    null,
+        currency:    null,
+        url:         document.getElementById('ac-url').value.trim() || null,
+        image:       document.getElementById('ac-image').value.trim() || '',
+        source:      'manual',
+    };
+
+    var manuals = loadManualConcerts();
+    manuals.push(concert);
+    saveManualConcerts(manuals);
+
+    allConcerts.push(concert);
+    allConcerts.sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+
+    closeAddConcert();
+    updateStats(allConcerts);
+    populateFilters(allConcerts);
+    applyFilter();
+}
+
+function deleteManualConcert(id) {
+    if (!confirm('Vols eliminar aquest concert afegit manualment?')) return;
+    saveManualConcerts(loadManualConcerts().filter(function(c) { return c.id !== id; }));
+    allConcerts = allConcerts.filter(function(c) { return c.id !== id; });
+    closePanel();
+    updateStats(allConcerts);
+    populateFilters(allConcerts);
+    applyFilter();
+}
+
 function openPanel(idx) {
     var c = allConcerts[idx];
     if (!c) return;
@@ -1546,16 +1721,25 @@ function openPanel(idx) {
         ? '<img src="' + escHtml(c.image) + '" alt="' + escHtml(c.artist) + '">'
         : '&#127925;';
 
+    var manualBadge = c.source === 'manual'
+        ? '<span style="background:var(--bg-hover);border:1px solid var(--accent);color:var(--accent);font-size:11px;font-weight:700;padding:2px 10px;border-radius:50px;margin-left:8px">AFEGIT MANUALMENT</span>'
+        : '';
+    var deleteSection = c.source === 'manual'
+        ? '<div class="panel-section"><button class="btn" style="background:#7a2323;color:#fff" ' +
+          'onclick="deleteManualConcert(' + JSON.stringify(c.id) + ')">Eliminar aquest concert</button></div>'
+        : '';
+
     document.getElementById('panel-body').innerHTML =
         '<div class="panel-artist-image">' + heroImg + '</div>' +
-        '<div class="panel-title">' + escHtml(c.name || c.artist) + '</div>' +
+        '<div class="panel-title">' + escHtml(c.name || c.artist) + manualBadge + '</div>' +
         '<div class="panel-subtitle">' + escHtml(c.artist) + '</div>' +
         '<div class="panel-section">' +
         '<div class="panel-section-title">Informació</div>' +
         infoRows +
         '</div>' +
         flightsSection +
-        accomSection;
+        accomSection +
+        deleteSection;
 
     document.getElementById('panel-overlay').classList.add('open');
     document.getElementById('side-panel').classList.add('open');
@@ -1618,12 +1802,22 @@ async function mainFlow() {
 
         if (!artists.length) {
             document.getElementById('loading-state').style.display = 'none';
-            document.getElementById('concerts-container').innerHTML =
-                '<div class="empty-state">' +
-                '<div class="empty-icon">&#127928;</div>' +
-                '<h2>Sense artistes</h2>' +
-                '<p>No s\'han trobat artistes als teus seguits ni a les teves llistes de reproducció.</p>' +
-                '</div>';
+            // Encara que no hi hagi artistes de Spotify, mostrem els concerts manuals
+            allConcerts = loadManualConcerts().sort(function(a, b) {
+                return (a.date || '').localeCompare(b.date || '');
+            });
+            if (allConcerts.length) {
+                updateStats(allConcerts);
+                populateFilters(allConcerts);
+                renderConcerts(allConcerts);
+            } else {
+                document.getElementById('concerts-container').innerHTML =
+                    '<div class="empty-state">' +
+                    '<div class="empty-icon">&#127928;</div>' +
+                    '<h2>Sense artistes</h2>' +
+                    '<p>No s\'han trobat artistes als teus seguits ni a les teves llistes. Pots afegir concerts manualment amb el botó de dalt.</p>' +
+                    '</div>';
+            }
             return;
         }
 
@@ -1634,6 +1828,9 @@ async function mainFlow() {
             setLoading('Buscant concerts… ' + done + '/' + total + ' artistes · ' + found + ' trobats');
             setProgress(done, total);
         });
+
+        // Afegim els concerts desats manualment
+        allConcerts = allConcerts.concat(loadManualConcerts());
 
         allConcerts.sort(function(a, b) {
             return (a.date || '').localeCompare(b.date || '');
