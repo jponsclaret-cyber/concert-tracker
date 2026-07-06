@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet } from 'react-native';
+import { FlatList, Platform, Pressable, StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
 import { getAllEquipment } from '@/db/queries/exercises';
 import { getUserEquipmentIds, setUserEquipmentIds } from '@/db/queries/equipment';
 import { useEquipmentStore } from '@/store/useEquipmentStore';
+import { useHealthSyncStore } from '@/store/useHealthSyncStore';
+import { isHealthPlatformSupported, requestHealthPermissions, syncExternalHealthActivities } from '@/services/health';
 
 interface EquipmentItem {
   id: string;
@@ -16,6 +18,11 @@ export default function SettingsScreen() {
   const [allEquipment, setAllEquipment] = useState<EquipmentItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const setAvailableEquipmentIds = useEquipmentStore((s) => s.setAvailableEquipmentIds);
+  const isHealthConnected = useHealthSyncStore((s) => s.isConnected);
+  const lastSyncedAt = useHealthSyncStore((s) => s.lastSyncedAt);
+  const setHealthConnected = useHealthSyncStore((s) => s.setConnected);
+  const setLastSyncedAt = useHealthSyncStore((s) => s.setLastSyncedAt);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     Promise.all([getAllEquipment(), getUserEquipmentIds()]).then(([equipment, selected]) => {
@@ -32,6 +39,22 @@ export default function SettingsScreen() {
     const ids = Array.from(next);
     await setUserEquipmentIds(ids);
     setAvailableEquipmentIds(ids);
+  };
+
+  const handleConnectHealth = async () => {
+    const granted = await requestHealthPermissions();
+    setHealthConnected(granted);
+    if (granted) await handleSyncNow();
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      await syncExternalHealthActivities();
+      setLastSyncedAt(new Date().toISOString());
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
@@ -56,9 +79,25 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Health sync</Text>
-        <Text style={styles.placeholder}>
-          Apple Health / Google Fit connection is coming in a later update.
-        </Text>
+        {!isHealthPlatformSupported() ? (
+          <Text style={styles.placeholder}>Not available on this platform.</Text>
+        ) : !isHealthConnected ? (
+          <Pressable style={styles.healthButton} onPress={handleConnectHealth}>
+            <Text style={styles.healthButtonText}>
+              Connect {Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'}
+            </Text>
+          </Pressable>
+        ) : (
+          <>
+            <Text style={styles.placeholder}>
+              Connected · last synced{' '}
+              {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : 'never'}
+            </Text>
+            <Pressable style={styles.healthButton} onPress={handleSyncNow} disabled={syncing}>
+              <Text style={styles.healthButtonText}>{syncing ? 'Syncing…' : 'Sync now'}</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );
@@ -109,5 +148,17 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     opacity: 0.6,
+  },
+  healthButton: {
+    backgroundColor: '#2f95dc',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  healthButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

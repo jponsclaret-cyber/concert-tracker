@@ -3,11 +3,13 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@kingstinct/react-native-healthkit": "^14.0.2",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.2",
     "expo-constants": "~57.0.3",
     "expo-crypto": "^57.0.0",
+    "expo-dev-client": "^6.0.15",
     "expo-font": "~57.0.0",
     "expo-linking": "~57.0.1",
     "expo-notifications": "^57.0.3",
@@ -20,6 +22,8 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
+    "react-native-health-connect": "^3.5.3",
+    "react-native-nitro-modules": "^0.36.1",
     "react-native-reanimated": "4.5.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
@@ -38,12 +42,14 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "verify:db": "tsx scripts/verify-db.ts",
     "verify:generator": "tsx scripts/verify-generator.ts",
-    "verify:recovery": "tsx scripts/verify-recovery.ts"
+    "verify:recovery": "tsx scripts/verify-recovery.ts",
+    "verify:activity-mapping": "tsx scripts/verify-activity-mapping.ts",
+    "verify": "npm run verify:db && npm run verify:generator && npm run verify:recovery && npm run verify:activity-mapping"
   },
   "private": true
 }

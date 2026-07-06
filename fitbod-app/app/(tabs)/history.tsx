@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { FlatList, StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
 import { listWorkoutSessions } from '@/db/queries/workouts';
+import { listExternalActivities } from '@/db/queries/externalActivities';
 
 interface SessionRow {
   id: string;
@@ -12,16 +13,44 @@ interface SessionRow {
   sourceType: 'generated' | 'manual' | 'imported';
 }
 
+interface ExternalActivityRow {
+  id: string;
+  activityType: string;
+  startDate: string;
+  durationMin: number;
+}
+
+type TimelineEntry =
+  | { kind: 'session'; date: string; data: SessionRow }
+  | { kind: 'external'; date: string; data: ExternalActivityRow };
+
+function formatActivityType(activityType: string): string {
+  return activityType
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export default function HistoryScreen() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [externalActivities, setExternalActivities] = useState<ExternalActivityRow[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       listWorkoutSessions().then(setSessions);
+      listExternalActivities().then(setExternalActivities);
     }, [])
   );
 
-  if (sessions.length === 0) {
+  const timeline = useMemo<TimelineEntry[]>(() => {
+    const entries: TimelineEntry[] = [
+      ...sessions.map((s): TimelineEntry => ({ kind: 'session', date: s.startedAt, data: s })),
+      ...externalActivities.map((a): TimelineEntry => ({ kind: 'external', date: a.startDate, data: a })),
+    ];
+    return entries.sort((a, b) => b.date.localeCompare(a.date));
+  }, [sessions, externalActivities]);
+
+  if (timeline.length === 0) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>History</Text>
@@ -35,25 +64,29 @@ export default function HistoryScreen() {
       <Text style={styles.title}>History</Text>
       <FlatList
         style={styles.list}
-        data={sessions}
-        keyExtractor={(item) => item.id}
+        data={timeline}
+        keyExtractor={(item) => `${item.kind}-${item.data.id}`}
         renderItem={({ item }) => (
           <View style={styles.row}>
             <Text style={styles.rowTitle}>
-              {new Date(item.startedAt).toLocaleDateString()}{' '}
-              {new Date(item.startedAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+              {new Date(item.date).toLocaleDateString()}{' '}
+              {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
-            <Text style={styles.rowSubtitle}>
-              {item.sourceType === 'manual'
-                ? 'Manual workout'
-                : item.sourceType === 'generated'
-                  ? 'Generated workout'
-                  : 'Imported activity'}
-              {item.completedAt ? '' : ' · in progress'}
-            </Text>
+            {item.kind === 'session' ? (
+              <Text style={styles.rowSubtitle}>
+                {item.data.sourceType === 'manual'
+                  ? 'Manual workout'
+                  : item.data.sourceType === 'generated'
+                    ? 'Generated workout'
+                    : 'Imported activity'}
+                {item.data.completedAt ? '' : ' · in progress'}
+              </Text>
+            ) : (
+              <Text style={styles.rowSubtitle}>
+                {formatActivityType(item.data.activityType)} · {Math.round(item.data.durationMin)} min ·
+                synced from health app
+              </Text>
+            )}
           </View>
         )}
       />

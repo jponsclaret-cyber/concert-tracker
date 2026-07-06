@@ -8,7 +8,8 @@
     "scheme": "fitbodapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.fitbod-app"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,16 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.WRITE_EXERCISE"
+      ],
+      "package": "com.anonymous.fitbodapp"
     },
     "web": {
       "bundler": "metro",
@@ -26,6 +36,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       [
         "expo-splash-screen",
         {
@@ -33,7 +44,15 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Fitbod-app reads workouts and activity from Apple Health so activity you log elsewhere counts toward your training and recovery.",
+          "NSHealthUpdateUsageDescription": "Fitbod-app writes the workouts you complete in the app back to Apple Health."
+        }
+      ],
+      "react-native-health-connect"
     ],
     "experiments": {
       "typedRoutes": true

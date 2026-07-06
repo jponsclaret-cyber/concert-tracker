@@ -25,11 +25,16 @@ export async function createWorkoutSession(
   return id;
 }
 
-export async function completeWorkoutSession(sessionId: string): Promise<void> {
-  await db
-    .update(workoutSessions)
-    .set({ completedAt: new Date().toISOString() })
+export async function completeWorkoutSession(
+  sessionId: string
+): Promise<{ startedAt: string; completedAt: string }> {
+  const completedAt = new Date().toISOString();
+  await db.update(workoutSessions).set({ completedAt }).where(eq(workoutSessions.id, sessionId));
+  const [session] = await db
+    .select({ startedAt: workoutSessions.startedAt })
+    .from(workoutSessions)
     .where(eq(workoutSessions.id, sessionId));
+  return { startedAt: session.startedAt, completedAt };
 }
 
 export async function addSetLog(input: {
