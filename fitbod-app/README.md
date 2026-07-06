@@ -25,16 +25,34 @@ npx expo run:ios
 npx expo run:android
 ```
 
-Or build remotely with EAS instead of a local Xcode/Android Studio install:
+Or build remotely with EAS instead of a local Xcode/Android Studio install — no Mac or Android
+Studio needed, Expo builds it in the cloud:
 
 ```sh
-npx eas build --profile development --platform ios
-npx eas build --profile development --platform android
+npx eas login                                       # your Expo account (free)
+npx eas build:configure                             # links this project to your EAS account
+npx eas build --profile development --platform ios  # or --platform android
+```
+
+An Expo/EAS account is required for `eas build`; an Apple Developer Program membership is
+required to install on a physical iPhone (HealthKit entitlements) or to distribute a TestFlight
+build. `eas build` walks you through registering your Apple account/device and managing
+certificates — just follow its prompts.
+
+Once the build finishes, EAS gives you a link/QR code: open it on the iPhone to install the dev
+client. Then, back on your machine:
+
+```sh
 npx expo start --dev-client
 ```
 
-An Expo/EAS account is required for `eas build`; an Apple Developer account is required to run
-on a physical iPhone (HealthKit entitlements) or to distribute a TestFlight build.
+and open the dev client app on the phone — it connects to this Metro server automatically (scan
+the QR code shown in the terminal if it doesn't).
+
+To actually test the Health sync end to end: in the app go to **Settings → Connect Apple Health**,
+grant the permission prompts, then tap **Sync now**. Recent workouts logged elsewhere (Apple
+Watch, a running app, etc.) should show up in **History**, and the muscle recovery bars on
+**Home** should shift accordingly.
 
 ## Sanity checks
 
