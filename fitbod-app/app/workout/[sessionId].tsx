@@ -7,6 +7,7 @@ import { ExercisePickerModal } from '@/components/ExercisePickerModal';
 import { RestTimer } from '@/components/RestTimer';
 import { getAllExercisesWithDetails, type ExerciseDetail } from '@/db/queries/exercises';
 import { addSetLog, completeWorkoutSession, getSessionSets } from '@/db/queries/workouts';
+import { useGeneratedWorkoutStore } from '@/store/useGeneratedWorkoutStore';
 
 interface LoggedSet {
   id: string;
@@ -26,6 +27,12 @@ export default function ActiveWorkoutScreen() {
   const [weightInput, setWeightInput] = useState('');
   const [repsInput, setRepsInput] = useState('');
   const [restKey, setRestKey] = useState(0);
+  const [planIndex, setPlanIndex] = useState(0);
+
+  const generatedWorkout = useGeneratedWorkoutStore((s) => s.workout);
+  const clearGeneratedWorkout = useGeneratedWorkoutStore((s) => s.clear);
+  const plannedExercises = generatedWorkout?.exercises ?? [];
+  const isPlanned = plannedExercises.length > 0;
 
   const refreshSets = useCallback(async () => {
     if (!sessionId) return;
@@ -37,6 +44,18 @@ export default function ActiveWorkoutScreen() {
     getAllExercisesWithDetails().then(setAllExercises);
     refreshSets();
   }, [refreshSets]);
+
+  useEffect(() => {
+    if (!isPlanned || allExercises.length === 0) return;
+    const planned = plannedExercises[planIndex];
+    if (!planned) return;
+    const exercise = allExercises.find((e) => e.id === planned.exerciseId);
+    if (!exercise) return;
+    setSelectedExercise(exercise);
+    setWeightInput(planned.prescribedWeightKg != null ? String(planned.prescribedWeightKg) : '');
+    setRepsInput(String(planned.prescribedReps));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlanned, planIndex, allExercises]);
 
   const handleSelectExercise = (exercise: ExerciseDetail) => {
     setSelectedExercise(exercise);
@@ -71,7 +90,12 @@ export default function ActiveWorkoutScreen() {
   const handleFinish = async () => {
     if (!sessionId) return;
     await completeWorkoutSession(sessionId);
+    clearGeneratedWorkout();
     router.replace('/(tabs)/history');
+  };
+
+  const handleNextPlannedExercise = () => {
+    setPlanIndex((i) => Math.min(i + 1, plannedExercises.length - 1));
   };
 
   const setsForSelected = selectedExercise
@@ -87,6 +111,12 @@ export default function ActiveWorkoutScreen() {
           {selectedExercise ? `Switch exercise (${selectedExercise.name})` : 'Add exercise'}
         </Text>
       </Pressable>
+
+      {isPlanned && (
+        <Text style={styles.planProgress}>
+          Exercise {planIndex + 1} of {plannedExercises.length}
+        </Text>
+      )}
 
       {selectedExercise && (
         <View style={styles.exerciseCard}>
@@ -122,6 +152,12 @@ export default function ActiveWorkoutScreen() {
           </View>
 
           <RestTimer resetKey={restKey} />
+
+          {isPlanned && planIndex < plannedExercises.length - 1 && (
+            <Pressable style={styles.nextButton} onPress={handleNextPlannedExercise}>
+              <Text style={styles.nextButtonText}>Next exercise</Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -159,6 +195,21 @@ const styles = StyleSheet.create({
   },
   addExerciseText: {
     fontSize: 16,
+    fontWeight: '500',
+  },
+  planProgress: {
+    fontSize: 13,
+    opacity: 0.6,
+  },
+  nextButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  nextButtonText: {
+    fontSize: 14,
     fontWeight: '500',
   },
   exerciseCard: {
