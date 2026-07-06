@@ -7,6 +7,7 @@ import { ExercisePickerModal } from '@/components/ExercisePickerModal';
 import { RestTimer } from '@/components/RestTimer';
 import { getAllExercisesWithDetails, type ExerciseDetail } from '@/db/queries/exercises';
 import { addSetLog, completeWorkoutSession, getSessionSets } from '@/db/queries/workouts';
+import { updateMuscleRecoveryForSession } from '@/db/queries/recovery';
 import { useGeneratedWorkoutStore } from '@/store/useGeneratedWorkoutStore';
 
 interface LoggedSet {
@@ -90,6 +91,7 @@ export default function ActiveWorkoutScreen() {
   const handleFinish = async () => {
     if (!sessionId) return;
     await completeWorkoutSession(sessionId);
+    await updateMuscleRecoveryForSession(sessionId);
     clearGeneratedWorkout();
     router.replace('/(tabs)/history');
   };

@@ -68,6 +68,7 @@ async function main() {
     exercises,
     availableEquipmentIds: allEquipment.map((e) => e.id),
     allMuscleGroupIds: muscleGroups.map((m) => m.id),
+    muscleRecoveryPctById: Object.fromEntries(muscleGroups.map((m) => [m.id, 100])),
     lastTrainedAtByMuscle: {},
     lastUsedAtByExercise: {},
     lastSessionSetsByExercise: {},
@@ -108,6 +109,17 @@ async function main() {
     throw new Error('Swap changed the target muscle group');
   }
   console.log('Swap check passed.');
+
+  // A fatigued muscle group should be deprioritized (and excluded once below threshold).
+  const fatiguedInput: GeneratorInput = {
+    ...baseInput,
+    muscleRecoveryPctById: { ...baseInput.muscleRecoveryPctById, chest: 20 },
+  };
+  const fatiguedWorkout = generateWorkout(fatiguedInput);
+  if (fatiguedWorkout.focusMuscleGroupIds.includes('chest')) {
+    throw new Error('Fatigued muscle group should have been excluded from focus');
+  }
+  console.log('Muscle recovery deprioritization check passed.');
 
   console.log('All generator sanity checks passed.');
 }

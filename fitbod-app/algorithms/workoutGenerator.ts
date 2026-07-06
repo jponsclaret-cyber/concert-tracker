@@ -6,11 +6,13 @@ const MAX_EXERCISES = 10;
 const MINUTES_PER_EXERCISE = 6.5; // ~3 sets x (40s work + 90s rest)
 const DEFAULT_SETS_PER_EXERCISE = 3;
 const MAX_FOCUS_MUSCLE_GROUPS = 4;
+const TRAINABLE_RECOVERY_PCT = 70;
 
 export interface GeneratorInput {
   exercises: ExerciseDetail[];
   availableEquipmentIds: string[];
   allMuscleGroupIds: string[];
+  muscleRecoveryPctById: Record<string, number>;
   lastTrainedAtByMuscle: Record<string, string | null>;
   lastUsedAtByExercise: Record<string, string | null>;
   lastSessionSetsByExercise: Record<string, SetHistoryEntry[]>;
@@ -84,19 +86,29 @@ function pickExerciseForMuscle(
 export function generateWorkout(input: GeneratorInput): GeneratedWorkout {
   const now = Date.now();
 
-  const rankedMuscles = [...input.allMuscleGroupIds].sort(
-    (a, b) =>
+  // Most-recovered first; among ties (e.g. both fully recovered) prefer whichever
+  // has gone longer without training.
+  const rankedMuscles = [...input.allMuscleGroupIds].sort((a, b) => {
+    const recoveryDiff = (input.muscleRecoveryPctById[b] ?? 100) - (input.muscleRecoveryPctById[a] ?? 100);
+    if (recoveryDiff !== 0) return recoveryDiff;
+    return (
       hoursSince(input.lastTrainedAtByMuscle[b] ?? null, now) -
       hoursSince(input.lastTrainedAtByMuscle[a] ?? null, now)
+    );
+  });
+
+  const trainableMuscles = rankedMuscles.filter(
+    (id) => (input.muscleRecoveryPctById[id] ?? 100) >= TRAINABLE_RECOVERY_PCT
   );
+  const muscleCandidates = trainableMuscles.length > 0 ? trainableMuscles : rankedMuscles;
 
   const numExercises = Math.max(
     MIN_EXERCISES,
     Math.min(MAX_EXERCISES, Math.floor(input.desiredDurationMinutes / MINUTES_PER_EXERCISE))
   );
-  const focusMuscleGroupIds = rankedMuscles.slice(
+  const focusMuscleGroupIds = muscleCandidates.slice(
     0,
-    Math.min(MAX_FOCUS_MUSCLE_GROUPS, rankedMuscles.length)
+    Math.min(MAX_FOCUS_MUSCLE_GROUPS, muscleCandidates.length)
   );
 
   const equipmentFilteredExercises = input.exercises.filter((e) =>

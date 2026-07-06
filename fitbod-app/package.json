@@ -42,7 +42,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "verify:db": "tsx scripts/verify-db.ts",
-    "verify:generator": "tsx scripts/verify-generator.ts"
+    "verify:generator": "tsx scripts/verify-generator.ts",
+    "verify:recovery": "tsx scripts/verify-recovery.ts"
   },
   "private": true
 }

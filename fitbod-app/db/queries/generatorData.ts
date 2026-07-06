@@ -3,11 +3,13 @@ import { isNotNull } from 'drizzle-orm';
 import { db } from '../client';
 import { setLogs, workoutSessions } from '../schema';
 import type { ExerciseDetail } from './exercises';
+import { getMuscleRecoveryPctById } from './recovery';
 import type { SetHistoryEntry } from '@/algorithms/progressiveOverload';
 
 const SAME_SESSION_WINDOW_MS = 2 * 60 * 60 * 1000;
 
 export interface GeneratorHistoryData {
+  muscleRecoveryPctById: Record<string, number>;
   lastTrainedAtByMuscle: Record<string, string | null>;
   lastUsedAtByExercise: Record<string, string | null>;
   lastSessionSetsByExercise: Record<string, SetHistoryEntry[]>;
@@ -63,5 +65,7 @@ export async function buildGeneratorHistoryData(
     }));
   }
 
-  return { lastTrainedAtByMuscle, lastUsedAtByExercise, lastSessionSetsByExercise };
+  const muscleRecoveryPctById = await getMuscleRecoveryPctById();
+
+  return { muscleRecoveryPctById, lastTrainedAtByMuscle, lastUsedAtByExercise, lastSessionSetsByExercise };
 }
