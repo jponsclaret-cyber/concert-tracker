@@ -1,10 +1,14 @@
+import { useEffect, useState } from 'react';
 import { SymbolView } from 'expo-symbols';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { isOnboardingComplete } from '@/lib/settingsStorage';
+import { getUserEquipmentIds } from '@/db/queries/equipment';
+import { useEquipmentStore } from '@/store/useEquipmentStore';
 
 function TabIcon({ ios, android, color }: { ios: string; android: string; color: ColorValue }) {
   return (
@@ -19,6 +23,21 @@ function TabIcon({ ios, android, color }: { ios: string; android: string; color:
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const [onboardingComplete, setOnboardingCompleteState] = useState<boolean | null>(null);
+  const setAvailableEquipmentIds = useEquipmentStore((s) => s.setAvailableEquipmentIds);
+
+  useEffect(() => {
+    isOnboardingComplete().then(async (complete) => {
+      if (complete) {
+        const ids = await getUserEquipmentIds();
+        setAvailableEquipmentIds(ids);
+      }
+      setOnboardingCompleteState(complete);
+    });
+  }, [setAvailableEquipmentIds]);
+
+  if (onboardingComplete === null) return null;
+  if (!onboardingComplete) return <Redirect href="/onboarding" />;
 
   return (
     <Tabs

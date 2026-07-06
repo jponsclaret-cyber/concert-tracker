@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
 import { FlatList, Pressable, StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
 import { getAllEquipment } from '@/db/queries/exercises';
 import { getUserEquipmentIds, setUserEquipmentIds } from '@/db/queries/equipment';
+import { setOnboardingComplete } from '@/lib/settingsStorage';
 import { useEquipmentStore } from '@/store/useEquipmentStore';
 
 interface EquipmentItem {
@@ -12,7 +14,7 @@ interface EquipmentItem {
   category: string;
 }
 
-export default function SettingsScreen() {
+export default function OnboardingEquipmentScreen() {
   const [allEquipment, setAllEquipment] = useState<EquipmentItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const setAvailableEquipmentIds = useEquipmentStore((s) => s.setAvailableEquipmentIds);
@@ -24,21 +26,27 @@ export default function SettingsScreen() {
     });
   }, []);
 
-  const toggle = async (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
-    const ids = Array.from(next);
+  const toggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleContinue = async () => {
+    const ids = Array.from(selectedIds);
     await setUserEquipmentIds(ids);
     setAvailableEquipmentIds(ids);
+    await setOnboardingComplete();
+    router.replace('/(tabs)');
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
-
-      <Text style={styles.sectionTitle}>My equipment</Text>
+      <Text style={styles.title}>Your equipment</Text>
+      <Text style={styles.subtitle}>Select everything you have access to.</Text>
       <FlatList
         style={styles.list}
         data={allEquipment}
@@ -53,13 +61,9 @@ export default function SettingsScreen() {
           );
         }}
       />
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Health sync</Text>
-        <Text style={styles.placeholder}>
-          Apple Health / Google Fit connection is coming in a later update.
-        </Text>
-      </View>
+      <Pressable style={styles.button} onPress={handleContinue}>
+        <Text style={styles.buttonText}>Continue ({selectedIds.size} selected)</Text>
+      </Pressable>
     </View>
   );
 }
@@ -67,18 +71,16 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    padding: 24,
+    paddingTop: 60,
     gap: 12,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    opacity: 0.8,
-    marginTop: 8,
+  subtitle: {
+    opacity: 0.7,
   },
   list: {
     flex: 1,
@@ -87,15 +89,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowText: {
-    fontSize: 15,
+    fontSize: 16,
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: 4,
     borderWidth: 2,
     borderColor: '#2f95dc',
@@ -103,11 +105,15 @@ const styles = StyleSheet.create({
   checkboxSelected: {
     backgroundColor: '#2f95dc',
   },
-  section: {
-    gap: 4,
-    paddingVertical: 8,
+  button: {
+    backgroundColor: '#2f95dc',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
   },
-  placeholder: {
-    opacity: 0.6,
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
