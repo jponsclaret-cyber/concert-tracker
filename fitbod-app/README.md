@@ -34,10 +34,14 @@ npx eas build:configure                             # links this project to your
 npx eas build --profile development --platform ios  # or --platform android
 ```
 
-An Expo/EAS account is required for `eas build`; an Apple Developer Program membership is
-required to install on a physical iPhone (HealthKit entitlements) or to distribute a TestFlight
-build. `eas build` walks you through registering your Apple account/device and managing
-certificates — just follow its prompts.
+An Expo/EAS account is required for `eas build`. Installing on a **physical iPhone** additionally
+requires an Apple Developer Program membership (paid) for device provisioning — `eas build` walks
+you through registering your Apple account/device and managing certificates. Without one, use the
+`development` profile as configured (`ios.simulator: true`) to build for the **iOS Simulator**
+instead — no Apple account needed, but the Simulator has no real Health app data or Apple Watch to
+sync from; you can manually add sample workouts in the Simulator's Health app to exercise the sync
+flow. Once you do have a paid Apple Developer account, use `--profile development-device` instead
+to build a real-device install.
 
 Once the build finishes, EAS gives you a link/QR code: open it on the iPhone to install the dev
 client. Then, back on your machine:
