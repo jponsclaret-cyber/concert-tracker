@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Subvencions</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --bg-card: #f0f0f0;
+            --bg-hover: #e4e4e4;
+            --accent: #1db954;
+            --accent-hover: #1ed760;
+            --text-primary: #121212;
+            --text-secondary: #5e5e5e;
+            --text-muted: #a0a0a0;
+            --border: #e0e0e0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        .app-header {
+            background: linear-gradient(to bottom, #eafaf0 0%, var(--bg-primary) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 28px 32px 24px;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .app-header h1 { font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .app-header h1 span { color: var(--accent); }
+        .app-header p { color: var(--text-secondary); font-size: 13px; margin-top: 6px; max-width: 640px; line-height: 1.5; }
+        .app-header .official-link { font-size: 12px; margin-top: 8px; display: inline-block; color: var(--accent); font-weight: 600; text-decoration: none; }
+        .app-header .official-link:hover { text-decoration: underline; }
+
+        .app-content { padding: 24px 32px 64px; max-width: 900px; margin: 0 auto; }
+
+        /* ── SEARCH CONTROLS ─────────────────────── */
+        .search-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .search-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+        .search-row input[type="text"] {
+            flex: 1; min-width: 220px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        .search-row input[type="text"]:focus { outline: none; border-color: var(--accent); }
+        .search-row select {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 13px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .search-row select:focus { outline: none; border-color: var(--accent); }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+        .checkbox-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+        .btn {
+            padding: 12px 24px; border: none; border-radius: 50px;
+            font-size: 13px; font-weight: 700;
+            letter-spacing: 0.05em; text-transform: uppercase;
+            cursor: pointer; transition: all 0.2s;
+            background: var(--accent); color: #000;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-outline {
+            background: transparent; color: var(--text-secondary);
+            border: 2px solid var(--border);
+        }
+        .btn-outline:hover { color: var(--text-primary); border-color: var(--text-primary); }
+
+        .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+        .chip {
+            font-size: 12px; font-weight: 600;
+            padding: 6px 14px; border-radius: 50px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+        }
+        .chip:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+        /* ── STATES ───────────────────────────────── */
+        .error-banner {
+            background: #3d1a1a; border: 1px solid #7a2323;
+            color: #ff8080; padding: 14px 16px;
+            border-radius: 8px; margin-bottom: 20px;
+            font-size: 13px; line-height: 1.5; display: none;
+        }
+        .error-banner a { color: #ffb3b3; font-weight: 700; }
+        .loading-state {
+            display: none; flex-direction: column; align-items: center;
+            padding: 60px 20px; gap: 16px; color: var(--text-secondary); font-size: 14px;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); display: none; }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+        .results-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; display: none; }
+
+        /* ── RESULT CARDS ─────────────────────────── */
+        .results-list { display: flex; flex-direction: column; gap: 12px; }
+        .result-card {
+            background: var(--bg-card); border-radius: 12px;
+            padding: 18px 20px; transition: background 0.15s;
+        }
+        .result-card:hover { background: var(--bg-hover); }
+        .result-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; line-height: 1.4; }
+        .result-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; }
+        .result-meta-item { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; }
+        .result-meta-item b { color: var(--text-primary); font-weight: 600; }
+        .status-badge {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+            padding: 3px 10px; border-radius: 50px;
+        }
+        .status-open { background: rgba(29,185,84,0.18); color: #1a9e49; }
+        .status-closed { background: rgba(160,160,160,0.2); color: var(--text-muted); }
+        .status-unknown { background: rgba(160,160,160,0.12); color: var(--text-muted); }
+        .result-links { display: flex; gap: 10px; margin-top: 4px; }
+        .result-links a {
+            font-size: 12px; font-weight: 700; color: var(--accent);
+            text-decoration: none;
+        }
+        .result-links a:hover { text-decoration: underline; }
+
+        /* ── PAGINATION ───────────────────────────── */
+        .pagination {
+            display: none; align-items: center; justify-content: center;
+            gap: 16px; margin-top: 24px;
+        }
+        .pagination span { font-size: 13px; color: var(--text-secondary); }
+
+        .footer-note {
+            margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border);
+            font-size: 12px; color: var(--text-muted); line-height: 1.6;
+        }
+        .footer-note a { color: var(--text-secondary); }
+
+        @media (max-width: 600px) {
+            .app-header { padding: 20px 16px; }
+            .app-content { padding: 16px 16px 48px; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="app-header">
+    <h1>&#128269; Buscador de <span>Subvencions</span></h1>
+    <p>Cerca convocatòries de subvencions i ajudes públiques a Catalunya i a tot l'Estat espanyol, amb dades obertes
+       de la Base de Dades Nacional de Subvencions (BDNS). Aquesta eina consulta directament l'API pública oficial
+       des del teu navegador — no s'envien dades a cap servidor intermedi.</p>
+    <a class="official-link" href="https://www.infosubvenciones.es/bdnstrans/GE/es/convocatorias" target="_blank" rel="noopener">
+        Obrir el portal oficial de la BDNS &#8599;
+    </a>
+</header>
+
+<div class="app-content">
+    <div class="search-panel">
+        <div class="search-row">
+            <input type="text" id="search-input" placeholder="p.ex. digitalització, música, lloguer, autònoms..."
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();runSearch(0);}">
+            <button class="btn" onclick="runSearch(0)">Cercar</button>
+        </div>
+        <div class="search-row">
+            <select id="region-filter">
+                <option value="">Tots els àmbits territorials</option>
+                <option value="catalunya">Catalunya</option>
+                <option value="estat">Nivell estatal</option>
+            </select>
+            <select id="tipo-admin">
+                <option value="">Qualsevol administració</option>
+                <option value="C">Administració de l'Estat</option>
+                <option value="A">Comunitats autònomes</option>
+                <option value="L">Entitats locals</option>
+                <option value="O">Altres organismes</option>
+            </select>
+            <label class="checkbox-row">
+                <input type="checkbox" id="only-open" checked>
+                Només convocatòries obertes
+            </label>
+        </div>
+        <div class="chips">
+            <span class="chip" onclick="quickSearch('autònoms i empreses')">Autònoms i empreses</span>
+            <span class="chip" onclick="quickSearch('cultura')">Cultura</span>
+            <span class="chip" onclick="quickSearch('música')">Música</span>
+            <span class="chip" onclick="quickSearch('habitatge lloguer')">Habitatge</span>
+            <span class="chip" onclick="quickSearch('beques')">Beques</span>
+            <span class="chip" onclick="quickSearch('formació ocupació')">Formació i ocupació</span>
+            <span class="chip" onclick="quickSearch('igualtat social')">Ajudes socials</span>
+        </div>
+    </div>
+
+    <div class="error-banner" id="error-banner"></div>
+
+    <div class="loading-state" id="loading-state">
+        <div class="spinner"></div>
+        <div>Cercant convocatòries...</div>
+    </div>
+
+    <div class="empty-state" id="empty-state">
+        <div class="empty-icon">&#128203;</div>
+        <h2>Cap resultat</h2>
+        <p>Prova amb altres paraules clau o treu algun filtre.</p>
+    </div>
+
+    <div class="results-meta" id="results-meta"></div>
+    <div class="results-list" id="results-list"></div>
+
+    <div class="pagination" id="pagination">
+        <button class="btn btn-outline" id="prev-btn" onclick="runSearch(currentPage - 1)">&larr; Anterior</button>
+        <span id="page-indicator"></span>
+        <button class="btn btn-outline" id="next-btn" onclick="runSearch(currentPage + 1)">Següent &rarr;</button>
+    </div>
+
+    <div class="footer-note">
+        Dades proporcionades per la <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">Base de Dades Nacional de Subvencions (BDNS)</a>,
+        el sistema oficial de publicitat de subvencions i ajudes públiques d'Espanya. Aquesta eina és només informativa:
+        verifica sempre els terminis, requisits i documentació al portal oficial abans de sol·licitar qualsevol ajuda.
+    </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════════════════════ */
+const BDNS_SEARCH_URL  = 'https://www.infosubvenciones.es/bdnstrans/api/convocatorias/busqueda';
+const BDNS_DETAIL_URL  = 'https://www.infosubvenciones.es/bdnstrans/GE/es/convocatoria/';
+const BDNS_PORTAL_URL  = 'https://www.infosubvenciones.es/bdnstrans/GE/es/convocatorias';
+const PAGE_SIZE = 20;
+
+let currentPage = 0;
+let lastTotalPages = null;
+
+const CATALUNYA_KEYWORDS = [
+    'catalunya', 'cataluña', 'generalitat de catalunya', 'generalitat catalunya',
+    'barcelona', 'girona', 'lleida', 'tarragona', 'diputació', 'diputacio'
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════ */
+function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+}
+
+function getField(obj, names) {
+    if (!obj) return null;
+    for (var i = 0; i < names.length; i++) {
+        var v = obj[names[i]];
+        if (v !== undefined && v !== null && v !== '') return v;
+    }
+    return null;
+}
+
+// La BDNS acostuma a retornar dates en format dd/mm/yyyy; també provem ISO.
+function parseLooseDate(str) {
+    if (!str) return null;
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(str);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    var d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateLoose(str) {
+    var d = parseLooseDate(str);
+    if (!d) return escHtml(str);
+    return d.toLocaleDateString('ca-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function extractItems(data) {
+    if (Array.isArray(data)) return data;
+    if (!data) return [];
+    return data.content || data.rows || data.convocatorias || data.result || [];
+}
+
+function extractTotalPages(data, items) {
+    if (!data) return null;
+    if (typeof data.totalPages === 'number') return data.totalPages;
+    if (typeof data.totalElements === 'number') return Math.ceil(data.totalElements / PAGE_SIZE);
+    if (typeof data.total === 'number') return Math.ceil(data.total / PAGE_SIZE);
+    return items.length < PAGE_SIZE ? currentPage + 1 : null;
+}
+
+function matchesRegion(item, region) {
+    if (region !== 'catalunya') return true;
+    var haystack = JSON.stringify(item).toLowerCase();
+    return CATALUNYA_KEYWORDS.some(function(k) { return haystack.indexOf(k) !== -1; });
+}
+
+function isOpenNow(item) {
+    var deadline = getField(item, ['fechaFinSolicitud', 'fechaLimite', 'plazoFin', 'fechaFin']);
+    var d = parseLooseDate(deadline);
+    if (!d) return null; // desconegut
+    return d.getTime() >= new Date().setHours(0,0,0,0);
+}
+
+function quickSearch(term) {
+    document.getElementById('search-input').value = term;
+    runSearch(0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SEARCH
+═══════════════════════════════════════════════════════════════ */
+async function runSearch(page) {
+    if (page < 0) return;
+
+    var keyword   = document.getElementById('search-input').value.trim();
+    var tipoAdmin = document.getElementById('tipo-admin').value;
+    var region    = document.getElementById('region-filter').value;
+    var onlyOpen  = document.getElementById('only-open').checked;
+
+    var params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(PAGE_SIZE),
+        order: 'fechaRecepcion',
+        direccion: 'desc',
+        vpd: 'GE'
+    });
+    if (keyword) {
+        params.set('descripcion', keyword);
+        params.set('descripcionTipoBusqueda', '1');
+    }
+    // "estat" com a àmbit territorial es tradueix a nivell d'administració estatal
+    var effectiveTipoAdmin = tipoAdmin || (region === 'estat' ? 'C' : '');
+    if (effectiveTipoAdmin) params.set('tipoAdministracion', effectiveTipoAdmin);
+
+    setLoading(true);
+    showError('');
+    hide('empty-state');
+    hide('pagination');
+    hide('results-meta');
+
+    try {
+        var res = await fetch(BDNS_SEARCH_URL + '?' + params.toString(), {
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) throw new Error('El servidor de la BDNS ha respost amb error ' + res.status);
+        var data = await res.json();
+
+        var items = extractItems(data);
+        currentPage = page;
+        lastTotalPages = extractTotalPages(data, items);
+
+        if (region === 'catalunya') items = items.filter(function(it) { return matchesRegion(it, region); });
+        if (onlyOpen) items = items.filter(function(it) { return isOpenNow(it) !== false; });
+
+        renderResults(items, keyword);
+    } catch (err) {
+        console.error('Error cercant subvencions:', err);
+        showError(
+            'No s\'ha pogut connectar amb l\'API de la BDNS (' + escHtml(err.message) + '). ' +
+            'Pot ser un problema temporal, de xarxa o de restriccions del navegador (CORS). ' +
+            'Mentrestant pots cercar directament al ' +
+            '<a href="' + BDNS_PORTAL_URL + (keyword ? '?description=' + encodeURIComponent(keyword) : '') +
+            '" target="_blank" rel="noopener">portal oficial de la BDNS &#8599;</a>.'
+        );
+    } finally {
+        setLoading(false);
+    }
+}
+
+function renderResults(items, keyword) {
+    var list = document.getElementById('results-list');
+    var meta = document.getElementById('results-meta');
+
+    if (!items.length) {
+        list.innerHTML = '';
+        show('empty-state');
+        return;
+    }
+
+    meta.textContent = 'Mostrant ' + items.length + ' convocatòria' + (items.length === 1 ? '' : 's') +
+        (lastTotalPages ? ' — pàgina ' + (currentPage + 1) + ' de ' + lastTotalPages : ' — pàgina ' + (currentPage + 1));
+    show('results-meta');
+
+    list.innerHTML = items.map(renderCard).join('');
+
+    var pagination = document.getElementById('pagination');
+    var prevBtn = document.getElementById('prev-btn');
+    var nextBtn = document.getElementById('next-btn');
+    document.getElementById('page-indicator').textContent =
+        'Pàgina ' + (currentPage + 1) + (lastTotalPages ? ' de ' + lastTotalPages : '');
+    prevBtn.disabled = currentPage === 0;
+    nextBtn.disabled = lastTotalPages !== null ? currentPage + 1 >= lastTotalPages : items.length < PAGE_SIZE;
+    show('pagination', 'flex');
+}
+
+function renderCard(item) {
+    var id        = getField(item, ['numeroConvocatoria', 'id', 'idConvocatoria']);
+    var title     = getField(item, ['descripcion', 'descripcionConvocatoria', 'titulo']) || 'Convocatòria sense títol';
+    var organism  = getField(item, ['organoNombre']) ||
+                     (item.organo && getField(item.organo, ['desc', 'nombre', 'descripcion'])) ||
+                     getField(item, ['nivel1', 'departamento']) || 'Organisme desconegut';
+    var published = getField(item, ['fechaRecepcion', 'fechaPublicacion', 'fecha']);
+    var deadline  = getField(item, ['fechaFinSolicitud', 'fechaLimite', 'plazoFin', 'fechaFin']);
+    var amount    = getField(item, ['importeTotal', 'importe']);
+
+    var openState = isOpenNow(item);
+    var statusHtml = openState === true
+        ? '<span class="status-badge status-open">Oberta</span>'
+        : openState === false
+            ? '<span class="status-badge status-closed">Tancada</span>'
+            : '<span class="status-badge status-unknown">Data desconeguda</span>';
+
+    var metaParts = [];
+    if (organism) metaParts.push('<span class="result-meta-item">&#127970; <b>' + escHtml(organism) + '</b></span>');
+    if (published) metaParts.push('<span class="result-meta-item">&#128197; Publicada: ' + formatDateLoose(published) + '</span>');
+    if (deadline) metaParts.push('<span class="result-meta-item">&#9203; Termini: ' + formatDateLoose(deadline) + '</span>');
+    if (amount) metaParts.push('<span class="result-meta-item">&#128176; ' + escHtml(Number(amount).toLocaleString('ca-ES')) + ' &euro;</span>');
+
+    var detailLink = id
+        ? '<a href="' + BDNS_DETAIL_URL + escHtml(id) + '" target="_blank" rel="noopener">Veure detall oficial &#8599;</a>'
+        : '';
+
+    return (
+        '<div class="result-card">' +
+            '<div class="result-title">' + escHtml(title) + ' ' + statusHtml + '</div>' +
+            '<div class="result-meta">' + metaParts.join('') + '</div>' +
+            '<div class="result-links">' + detailLink + '</div>' +
+        '</div>'
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════════════════════════════ */
+function setLoading(on) {
+    document.getElementById('loading-state').style.display = on ? 'flex' : 'none';
+}
+function showError(html) {
+    var el = document.getElementById('error-banner');
+    if (!html) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.innerHTML = html;
+    el.style.display = 'block';
+}
+function hide(id) { document.getElementById(id).style.display = 'none'; }
+function show(id, display) { document.getElementById(id).style.display = display || 'block'; }
+
+// Cerca inicial en carregar la pàgina (convocatòries obertes més recents)
+runSearch(0);
+</script>
+</body>
+</html>
